@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@theme {
+  /* Palette — warm plaster + deep forest, grounded in pesantren aesthetic */
+  --color-cream-50: #FAF6EA;
+  --color-cream-100: #F3EEDF;
+  --color-cream-200: #EBE4CE;
+  --color-cream-300: #DED4B7;
+
+  --color-forest-500: #3A5A4A;
+  --color-forest-600: #2C4A3B;
+  --color-forest-700: #1E3830;
+  --color-forest-800: #152A24;
+
+  --color-copper-500: #B67A3F;
+  --color-copper-600: #9E692C;
+
+  --color-ink-900: #2A2820;
+  --color-ink-700: #4A473C;
+  --color-ink-500: #7A7264;
+  --color-ink-400: #9A947F;
+
+  --color-line: #D6CFB9;
+  --color-line-strong: #C4BDA8;
+
+  --color-success-500: #618258;
+  --color-error-500: #A44339;
+  --color-error-50: #F5E6E1;
+
+  /* Typography */
+  --font-display: var(--font-fraunces);
+  --font-body: var(--font-inter);
+}
+
+body {
+  background: var(--color-cream-100);
+  color: var(--color-ink-900);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Fraunces optical sizing helper */
+.font-display {
+  font-family: var(--font-fraunces);
+  font-variation-settings: 'opsz' 144, 'SOFT' 50;
+  letter-spacing: -0.01em;
+}
+
+/* Signature: double-line divider (evocative of manuscript ornament) */
+.divider-double {
+  border-top: 1px solid var(--color-line-strong);
+  border-bottom: 1px solid var(--color-line-strong);
+  height: 3px;
+  border-left: none;
+  border-right: none;
+}
