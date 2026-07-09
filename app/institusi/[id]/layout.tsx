@@ -42,7 +42,6 @@ export default async function InstitusiLayout({
 
   if (!profile) redirect('/')
 
-  // Fetch institusi
   const { data: institusi } = await supabase
     .from('institusi')
     .select('id, nama, jenis')
@@ -51,7 +50,6 @@ export default async function InstitusiLayout({
 
   if (!institusi) redirect('/institusi')
 
-  // Super admin bisa akses semua institusi
   let userPerans: string[] = []
   if (profile.is_super_admin) {
     userPerans = ['admin']
@@ -69,8 +67,8 @@ export default async function InstitusiLayout({
   }
 
   const isAdmin = userPerans.includes('admin')
+  const isPondok = institusi.jenis === 'PONPES'
 
-  // Check kalau user handle multi institusi (buat show back link)
   const { count: totalAssignments } = await supabase
     .from('user_institusi')
     .select('institusi_id', { count: 'exact', head: true })
@@ -93,9 +91,7 @@ export default async function InstitusiLayout({
           <div className="mt-3 pt-3 border-t border-line/60">
             <div className="text-xs text-ink-500 mb-0.5">{profile.nama}</div>
             <div className="text-[10px] uppercase tracking-widest text-ink-400">
-              {userPerans
-                .map((p) => peranLabel[p] ?? p)
-                .join(' · ')}
+              {userPerans.map((p) => peranLabel[p] ?? p).join(' · ')}
             </div>
           </div>
         </div>
@@ -114,6 +110,9 @@ export default async function InstitusiLayout({
                 Kategori
               </NavItem>
             </>
+          )}
+          {isPondok && (
+            <NavItem href={`/institusi/${institusi.id}/recap`}>Recap poin</NavItem>
           )}
         </nav>
 

@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { updateSantri, deleteSantri } from './santri/actions'
 
 type Institusi = { nama: string; jenis: string }
-type Stat = { label: string; value: number }
+type Stat = { label: string; value: number | string; suffix?: string }
 type SantriRow = {
   id: string
   nama: string
@@ -51,15 +51,20 @@ export default function AdminOverviewClient({
 
       <div className="divider-double mb-8" />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-12">
         {stats.map((s) => (
           <div
             key={s.label}
-            className="bg-cream-50 border border-line rounded-xl p-5"
+            className="bg-cream-50 border border-line rounded-xl p-4"
           >
-            <div className="text-xs text-ink-500 mb-2">{s.label}</div>
-            <div className="font-display text-3xl text-forest-800">
+            <div className="text-[10px] text-ink-500 mb-1 uppercase tracking-wider">
+              {s.label}
+            </div>
+            <div className="font-display text-2xl text-forest-800">
               {s.value}
+              {s.suffix && (
+                <span className="text-lg text-ink-500 ml-0.5">{s.suffix}</span>
+              )}
             </div>
           </div>
         ))}

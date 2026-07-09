@@ -7,6 +7,14 @@ const jenisLabel: Record<string, string> = {
   PONPES: 'Pondok Pesantren',
 }
 
+function getWeekStart(): string {
+  const d = new Date()
+  const day = d.getDay()
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1) // Monday
+  d.setDate(diff)
+  return d.toISOString().split('T')[0]
+}
+
 export default async function InstitusiOverviewPage({
   params,
 }: {
@@ -66,16 +74,14 @@ async function AdminOverview({
   institusi: { nama: string; jenis: string }
 }) {
   const supabase = await createClient()
+  const weekStart = getWeekStart()
 
-  const monthStart = new Date(new Date().setDate(1)).toISOString().split('T')[0]
-  const today = new Date().toISOString().split('T')[0]
-
-  // Fetch stats + santri list in parallel
   const [
     { count: santriCount },
     { count: kategoriCount },
     { count: pengajarCount },
-    { count: progresBulanIni },
+    { count: progresMingguIni },
+    { data: allProgress },
     { data: santriList },
   ] = await Promise.all([
     supabase
@@ -94,7 +100,11 @@ async function AdminOverview({
       .from('progress')
       .select('*', { count: 'exact', head: true })
       .eq('institusi_id', institusiId)
-      .gte('tanggal', monthStart),
+      .gte('tanggal', weekStart),
+    supabase
+      .from('progress')
+      .select('absen, lancar')
+      .eq('institusi_id', institusiId),
     supabase
       .from('santri')
       .select('id, nama, kelas, halaqoh, tahun_masuk')
@@ -102,9 +112,24 @@ async function AdminOverview({
       .order('nama'),
   ])
 
-  const santriIds = (santriList ?? []).map((s) => s.id)
+  // Absensi & kelancaran percentages
+  const absenData = (allProgress ?? []).filter((p) => p.absen !== null)
+  const hadirCount = absenData.filter((p) => p.absen === false).length
+  const kehadiranPct =
+    absenData.length > 0
+      ? Math.round((hadirCount / absenData.length) * 100)
+      : null
 
-  // Fetch assignments dan progres hari ini secara parallel
+  const lancarData = (allProgress ?? []).filter((p) => p.lancar !== null)
+  const lancarCount = lancarData.filter((p) => p.lancar === true).length
+  const kelancaranPct =
+    lancarData.length > 0
+      ? Math.round((lancarCount / lancarData.length) * 100)
+      : null
+
+  const santriIds = (santriList ?? []).map((s) => s.id)
+  const today = new Date().toISOString().split('T')[0]
+
   const [assignmentsResult, todayProgresResult] = await Promise.all([
     santriIds.length
       ? supabase
@@ -124,12 +149,8 @@ async function AdminOverview({
 
   const assignmentCounts = new Map<string, number>()
   for (const a of assignments) {
-    assignmentCounts.set(
-      a.santri_id,
-      (assignmentCounts.get(a.santri_id) ?? 0) + 1
-    )
+    assignmentCounts.set(a.santri_id, (assignmentCounts.get(a.santri_id) ?? 0) + 1)
   }
-
   const progresCounts = new Map<string, number>()
   for (const p of todayProgres) {
     progresCounts.set(p.santri_id, (progresCounts.get(p.santri_id) ?? 0) + 1)
@@ -142,10 +163,20 @@ async function AdminOverview({
   }))
 
   const stats = [
-    { label: 'Santri terdaftar', value: santriCount ?? 0 },
-    { label: 'Kategori aktif', value: kategoriCount ?? 0 },
-    { label: 'Pengajar', value: pengajarCount ?? 0 },
-    { label: 'Progres bulan ini', value: progresBulanIni ?? 0 },
+    { label: 'Santri terdaftar', value: santriCount ?? 0, suffix: '' },
+    { label: 'Kategori aktif', value: kategoriCount ?? 0, suffix: '' },
+    { label: 'Pengajar', value: pengajarCount ?? 0, suffix: '' },
+    { label: 'Progres minggu ini', value: progresMingguIni ?? 0, suffix: '' },
+    {
+      label: 'Kehadiran',
+      value: kehadiranPct ?? '—',
+      suffix: kehadiranPct !== null ? '%' : '',
+    },
+    {
+      label: 'Kelancaran',
+      value: kelancaranPct ?? '—',
+      suffix: kelancaranPct !== null ? '%' : '',
+    },
   ]
 
   return (
@@ -168,6 +199,7 @@ async function UstadzOverview({
   userId: string
 }) {
   const supabase = await createClient()
+  const weekStart = getWeekStart()
 
   const { data: myAssignments } = await supabase
     .from('ustadz_santri')
@@ -217,15 +249,37 @@ async function UstadzOverview({
 
   const kategoriList = Array.from(kategoriMap.values())
 
-  const { count: progresBulanIni } = await supabase
-    .from('progress')
-    .select('*', { count: 'exact', head: true })
-    .eq('ustadz_id', userId)
-    .eq('institusi_id', institusiId)
-    .gte(
-      'tanggal',
-      new Date(new Date().setDate(1)).toISOString().split('T')[0]
-    )
+  // Stats untuk ustadz
+  const [
+    { count: progresMingguIni },
+    { data: myProgress },
+  ] = await Promise.all([
+    supabase
+      .from('progress')
+      .select('*', { count: 'exact', head: true })
+      .eq('ustadz_id', userId)
+      .eq('institusi_id', institusiId)
+      .gte('tanggal', weekStart),
+    supabase
+      .from('progress')
+      .select('absen, lancar')
+      .eq('ustadz_id', userId)
+      .eq('institusi_id', institusiId),
+  ])
+
+  const absenData = (myProgress ?? []).filter((p) => p.absen !== null)
+  const hadirCount = absenData.filter((p) => p.absen === false).length
+  const kehadiranPct =
+    absenData.length > 0
+      ? Math.round((hadirCount / absenData.length) * 100)
+      : null
+
+  const lancarData = (myProgress ?? []).filter((p) => p.lancar !== null)
+  const lancarCount = lancarData.filter((p) => p.lancar === true).length
+  const kelancaranPct =
+    lancarData.length > 0
+      ? Math.round((lancarCount / lancarData.length) * 100)
+      : null
 
   return (
     <div>
@@ -237,23 +291,35 @@ async function UstadzOverview({
           {institusi.nama}
         </h1>
         <p className="mt-4 text-sm text-ink-500 max-w-md leading-relaxed">
-          Ini santri dan kategori yang kamu ampu di institusi ini.
+          Ringkasan santri dan aktivitas kamu di institusi ini.
         </p>
       </div>
 
       <div className="divider-double mb-8" />
 
-      <div className="grid grid-cols-2 gap-4 mb-10">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
         <div className="bg-cream-50 border border-line rounded-xl p-5">
-          <div className="text-xs text-ink-500 mb-2">Total santri</div>
+          <div className="text-xs text-ink-500 mb-2">Total santri ampuan</div>
           <div className="font-display text-3xl text-forest-800">
             {relevantAssignments.length}
           </div>
         </div>
         <div className="bg-cream-50 border border-line rounded-xl p-5">
-          <div className="text-xs text-ink-500 mb-2">Progres bulan ini</div>
+          <div className="text-xs text-ink-500 mb-2">Progres minggu ini</div>
           <div className="font-display text-3xl text-forest-800">
-            {progresBulanIni ?? 0}
+            {progresMingguIni ?? 0}
+          </div>
+        </div>
+        <div className="bg-cream-50 border border-line rounded-xl p-5">
+          <div className="text-xs text-ink-500 mb-2">Kehadiran</div>
+          <div className="font-display text-3xl text-forest-800">
+            {kehadiranPct !== null ? `${kehadiranPct}%` : '—'}
+          </div>
+        </div>
+        <div className="bg-cream-50 border border-line rounded-xl p-5">
+          <div className="text-xs text-ink-500 mb-2">Kelancaran</div>
+          <div className="font-display text-3xl text-forest-800">
+            {kelancaranPct !== null ? `${kelancaranPct}%` : '—'}
           </div>
         </div>
       </div>

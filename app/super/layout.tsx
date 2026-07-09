@@ -26,7 +26,6 @@ export default async function SuperLayout({
 
   return (
     <div className="min-h-screen flex">
-      {/* Sidebar */}
       <aside className="w-64 border-r border-line bg-cream-50 flex flex-col shrink-0">
         <div className="p-6 border-b border-line">
           <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-copper-600 mb-1">
@@ -41,6 +40,7 @@ export default async function SuperLayout({
 
         <nav className="flex-1 p-3 space-y-0.5">
           <NavLink href="/super">Ringkasan</NavLink>
+          <NavLink href="/super/santri">Semua santri</NavLink>
           <NavLink href="/super/pengguna">Pengguna</NavLink>
           <NavLink href="/super/institusi">Institusi</NavLink>
         </nav>
@@ -57,7 +57,6 @@ export default async function SuperLayout({
         </div>
       </aside>
 
-      {/* Main content */}
       <main className="flex-1 overflow-auto">
         <div className="max-w-5xl mx-auto p-8 lg:p-12">{children}</div>
       </main>

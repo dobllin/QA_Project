@@ -3,7 +3,7 @@ import { login } from './actions'
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string }> 
 }) {
   const params = await searchParams
   const error = params.error

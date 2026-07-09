@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
-import { createProgres, deleteProgres } from './actions'
+import { createProgres, deleteProgres, addPoinLog, deletePoinLog } from './actions'
 
 type Santri = {
   id: string
@@ -10,6 +10,7 @@ type Santri = {
   kelas: string | null
   halaqoh: string | null
   tahun_masuk: number | null
+  poin: number | null
 }
 
 type Kategori = {
@@ -23,6 +24,8 @@ type Progres = {
   tanggal: string
   kategori_id: number
   ustadz_id: string
+  jenis_setoran: string | null
+  lancar: boolean | null
   surah_mulai: string | null
   ayat_mulai: number | null
   surah_selesai: string | null
@@ -31,10 +34,23 @@ type Progres = {
   bab: string | null
   halaman_mulai: number | null
   halaman_selesai: number | null
+  absen: boolean | null
+  kendala: string | null
+  tersampaikan: boolean | null
   iqro_jilid: number | null
   iqro_halaman: number | null
   kualitas: string | null
   catatan: string | null
+  profiles: { nama: string } | null
+}
+
+type PoinLogEntry = {
+  id: string
+  jenis: 'kesalahan_ringan' | 'kesalahan_sedang' | 'kesalahan_parah' | 'kebaikan'
+  nilai_perubahan: number
+  keterangan: string | null
+  tanggal: string
+  ustadz_id: string
   profiles: { nama: string } | null
 }
 
@@ -44,7 +60,13 @@ function getProgresType(kategoriNama: string): ProgresType {
   const lower = kategoriNama.toLowerCase()
   if (lower.includes('kitab')) return 'kitab'
   if (lower.includes('iqro') || lower.includes('iqra')) return 'iqro'
-  if (lower.includes('tahfiz') || lower.includes('hafalan') || lower.includes('surat'))
+  if (
+    lower.includes('tahfiz') ||
+    lower.includes('hafalan') ||
+    lower.includes('quran') ||
+    lower.includes('surat') ||
+    lower.includes('murojaah')
+  )
     return 'tahfiz'
   return 'other'
 }
@@ -60,22 +82,62 @@ const formatTanggal = (iso: string) => {
   })
 }
 
+const nilaiOptions = [
+  { value: 'kurang', label: 'Kurang' },
+  { value: 'sedang', label: 'Sedang' },
+  { value: 'sangat_bagus', label: 'Sangat bagus' },
+]
+
+const jenisSetoranOptions = [
+  { value: 'hafalan_baru', label: 'Hafalan baru' },
+  { value: 'setoran', label: 'Setoran' },
+  { value: 'murojaah', label: 'Murojaah' },
+]
+
 const kualitasLabel: Record<string, string> = {
   lancar: 'Lancar',
   cukup: 'Cukup',
   ulang: 'Perlu diulang',
+  kurang: 'Kurang',
+  sedang: 'Sedang',
+  sangat_bagus: 'Sangat bagus',
+}
+
+const jenisSetoranLabel: Record<string, string> = {
+  hafalan_baru: 'Hafalan baru',
+  setoran: 'Setoran',
+  murojaah: 'Murojaah',
+}
+
+const poinJenisLabel: Record<string, string> = {
+  kebaikan: 'Kebaikan',
+  kesalahan_ringan: 'Kesalahan ringan',
+  kesalahan_sedang: 'Kesalahan sedang',
+  kesalahan_parah: 'Kesalahan parah',
+}
+
+function getNilaiVariant(
+  kualitas: string | null
+): 'success' | 'copper' | 'error' | 'muted' {
+  if (!kualitas) return 'muted'
+  if (kualitas === 'lancar' || kualitas === 'sangat_bagus') return 'success'
+  if (kualitas === 'cukup' || kualitas === 'sedang') return 'copper'
+  if (kualitas === 'ulang' || kualitas === 'kurang') return 'error'
+  return 'muted'
 }
 
 export default function SantriDetailClient({
   santri,
   kategoriList,
   progressHistory,
+  poinLog,
   institusiId,
   isAdmin,
 }: {
   santri: Santri
   kategoriList: Kategori[]
   progressHistory: Progres[]
+  poinLog: PoinLogEntry[]
   institusiId: number
   isAdmin: boolean
 }) {
@@ -92,10 +154,7 @@ export default function SantriDetailClient({
   const details = [
     santri.kelas && { label: 'Kelas', value: santri.kelas },
     santri.halaqoh && { label: 'Halaqoh', value: santri.halaqoh },
-    santri.tahun_masuk && {
-      label: 'Masuk',
-      value: String(santri.tahun_masuk),
-    },
+    santri.tahun_masuk && { label: 'Masuk', value: String(santri.tahun_masuk) },
   ].filter(Boolean) as { label: string; value: string }[]
 
   return (
@@ -128,6 +187,16 @@ export default function SantriDetailClient({
 
       <div className="divider-double mb-8" />
 
+      {/* POIN SECTION */}
+      <PoinSection
+        santriId={santri.id}
+        poin={santri.poin ?? 100}
+        poinLog={poinLog}
+        institusiId={institusiId}
+      />
+
+      <div className="divider-double mb-8 mt-8" />
+
       {kategoriList.length === 0 ? (
         <div className="bg-cream-50 border border-line rounded-xl p-8 text-center">
           <p className="text-sm text-ink-500">
@@ -136,7 +205,6 @@ export default function SantriDetailClient({
         </div>
       ) : (
         <>
-          {/* Tabs kategori */}
           {kategoriList.length > 1 && (
             <div className="flex flex-wrap gap-2 mb-6 border-b border-line">
               {kategoriList.map((k) => (
@@ -166,7 +234,6 @@ export default function SantriDetailClient({
                 </div>
               )}
 
-              {/* Form input */}
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="font-display text-2xl text-forest-800">
@@ -189,7 +256,6 @@ export default function SantriDetailClient({
                 )}
               </div>
 
-              {/* History */}
               <div>
                 <h2 className="font-display text-2xl text-forest-800 mb-4">
                   Riwayat setoran ({filteredHistory.length})
@@ -218,6 +284,207 @@ export default function SantriDetailClient({
           )}
         </>
       )}
+    </div>
+  )
+}
+
+function PoinSection({
+  santriId,
+  poin,
+  poinLog,
+  institusiId,
+}: {
+  santriId: string
+  poin: number
+  poinLog: PoinLogEntry[]
+  institusiId: number
+}) {
+  const [isPending, startTransition] = useTransition()
+  const [keterangan, setKeterangan] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [showAll, setShowAll] = useState(false)
+
+  const handleAddPoin = (
+    jenis: 'kesalahan_ringan' | 'kesalahan_sedang' | 'kesalahan_parah' | 'kebaikan'
+  ) => {
+    startTransition(async () => {
+      setError(null)
+      const result = await addPoinLog(
+        institusiId,
+        santriId,
+        jenis,
+        keterangan.trim() || null
+      )
+      if (result?.error) setError(result.error)
+      else setKeterangan('')
+    })
+  }
+
+  const poinColor =
+    poin >= 100
+      ? 'text-success-500'
+      : poin >= 80
+      ? 'text-forest-800'
+      : poin >= 50
+      ? 'text-copper-600'
+      : 'text-error-500'
+
+  const displayed = showAll ? poinLog : poinLog.slice(0, 3)
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-4 mb-4">
+        <h2 className="font-display text-2xl text-forest-800">Poin santri</h2>
+        <div className="flex items-baseline gap-2">
+          <div className="text-xs text-ink-500">Poin saat ini</div>
+          <div className={`font-display text-4xl ${poinColor}`}>{poin}</div>
+        </div>
+      </div>
+
+      <div className="bg-cream-50 border border-line rounded-xl p-5 space-y-4">
+        <div>
+          <label className="block text-xs font-medium text-ink-700 mb-1.5">
+            Keterangan (opsional)
+          </label>
+          <input
+            type="text"
+            value={keterangan}
+            onChange={(e) => setKeterangan(e.target.value)}
+            placeholder="Misal: terlambat ke halaqoh, membantu teman..."
+            className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-ink-700 mb-2">
+            Catat aksi
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <button
+              type="button"
+              onClick={() => handleAddPoin('kebaikan')}
+              disabled={isPending}
+              className="bg-success-500/10 hover:bg-success-500/20 disabled:opacity-50 text-success-500 border border-success-500/30 rounded-lg px-3 py-2 text-sm font-medium transition"
+            >
+              Kebaikan
+              <div className="text-[10px] font-normal opacity-70">+5</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAddPoin('kesalahan_ringan')}
+              disabled={isPending}
+              className="bg-copper-500/10 hover:bg-copper-500/20 disabled:opacity-50 text-copper-600 border border-copper-500/30 rounded-lg px-3 py-2 text-sm font-medium transition"
+            >
+              Ringan
+              <div className="text-[10px] font-normal opacity-70">−1</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAddPoin('kesalahan_sedang')}
+              disabled={isPending}
+              className="bg-copper-500/20 hover:bg-copper-500/30 disabled:opacity-50 text-copper-600 border border-copper-500/40 rounded-lg px-3 py-2 text-sm font-medium transition"
+            >
+              Sedang
+              <div className="text-[10px] font-normal opacity-70">−5</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAddPoin('kesalahan_parah')}
+              disabled={isPending}
+              className="bg-error-500/10 hover:bg-error-500/20 disabled:opacity-50 text-error-500 border border-error-500/30 rounded-lg px-3 py-2 text-sm font-medium transition"
+            >
+              Parah
+              <div className="text-[10px] font-normal opacity-70">−10</div>
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="p-3 bg-error-50 border border-error-500/30 rounded-lg text-sm text-error-500">
+            {error}
+          </div>
+        )}
+
+        {poinLog.length > 0 && (
+          <div className="pt-4 border-t border-line/60">
+            <div className="text-[10px] font-medium uppercase tracking-widest text-ink-500 mb-3">
+              Riwayat perubahan poin
+            </div>
+            <div className="space-y-2">
+              {displayed.map((log) => (
+                <PoinLogRow
+                  key={log.id}
+                  log={log}
+                  institusiId={institusiId}
+                />
+              ))}
+            </div>
+            {poinLog.length > 3 && (
+              <button
+                onClick={() => setShowAll((v) => !v)}
+                className="mt-3 text-xs text-forest-700 hover:text-forest-800 underline underline-offset-4"
+              >
+                {showAll
+                  ? 'Tampilkan sedikit'
+                  : `Tampilkan semua (${poinLog.length})`}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function PoinLogRow({
+  log,
+  institusiId,
+}: {
+  log: PoinLogEntry
+  institusiId: number
+}) {
+  const [isPending, startTransition] = useTransition()
+  const isPositif = log.nilai_perubahan > 0
+
+  return (
+    <div className="flex items-start justify-between gap-3 text-sm">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span
+            className={`font-display text-base ${
+              isPositif ? 'text-success-500' : 'text-error-500'
+            }`}
+          >
+            {isPositif ? '+' : ''}
+            {log.nilai_perubahan}
+          </span>
+          <span className="text-xs text-ink-700">
+            {poinJenisLabel[log.jenis]}
+          </span>
+        </div>
+        {log.keterangan && (
+          <div className="text-xs text-ink-500 italic mt-0.5">
+            {log.keterangan}
+          </div>
+        )}
+        <div className="text-[10px] text-ink-400 mt-0.5">
+          {formatTanggal(log.tanggal)}
+          {log.profiles?.nama && ` · ${log.profiles.nama}`}
+        </div>
+      </div>
+      <button
+        onClick={() => {
+          if (confirm('Batalkan aksi ini?')) {
+            startTransition(async () => {
+              await deletePoinLog(institusiId, log.id)
+            })
+          }
+        }}
+        disabled={isPending}
+        className="text-[10px] text-error-500 hover:underline disabled:opacity-50"
+      >
+        Batal
+      </button>
     </div>
   )
 }
@@ -272,6 +539,24 @@ function ProgresForm({
             className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
           />
         </div>
+        {progresType === 'tahfiz' && (
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">
+              Jenis kegiatan
+            </label>
+            <select
+              name="jenis_setoran"
+              defaultValue="hafalan_baru"
+              className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+            >
+              {jenisSetoranOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {progresType === 'tahfiz' && (
@@ -325,6 +610,31 @@ function ProgresForm({
 
       {progresType === 'kitab' && (
         <>
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-2">
+              Absen
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { value: 'true', label: 'Hadir' },
+                { value: 'false', label: 'Tidak hadir' },
+              ].map((k) => (
+                <label key={k.value} className="cursor-pointer inline-flex">
+                  <input
+                    type="radio"
+                    name="absen"
+                    value={k.value === 'true' ? 'false' : 'true'}
+                    className="peer sr-only"
+                    defaultChecked={k.value === 'true'}
+                  />
+                  <span className="px-4 py-1.5 border border-line rounded-lg text-sm text-ink-700 peer-checked:bg-forest-700 peer-checked:text-cream-50 peer-checked:border-forest-700 transition">
+                    {k.label}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-ink-700 mb-1.5">
@@ -371,6 +681,43 @@ function ProgresForm({
               />
             </div>
           </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">
+              Kendala
+            </label>
+            <textarea
+              name="kendala"
+              rows={2}
+              placeholder="Kendala yang dihadapi santri..."
+              className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700 resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-2">
+              Materi tersampaikan?
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { value: 'true', label: 'Ya, tersampaikan' },
+                { value: 'false', label: 'Tidak' },
+              ].map((k) => (
+                <label key={k.value} className="cursor-pointer inline-flex">
+                  <input
+                    type="radio"
+                    name="tersampaikan"
+                    value={k.value}
+                    className="peer sr-only"
+                    defaultChecked={k.value === 'true'}
+                  />
+                  <span className="px-4 py-1.5 border border-line rounded-lg text-sm text-ink-700 peer-checked:bg-forest-700 peer-checked:text-cream-50 peer-checked:border-forest-700 transition">
+                    {k.label}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
         </>
       )}
 
@@ -404,26 +751,46 @@ function ProgresForm({
         </div>
       )}
 
+      {progresType !== 'kitab' && (
+        <div>
+          <label className="block text-xs font-medium text-ink-700 mb-2">
+            Kelancaran
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: 'true', label: 'Lancar' },
+              { value: 'false', label: 'Tidak lancar' },
+            ].map((k) => (
+              <label key={k.value} className="cursor-pointer inline-flex">
+                <input
+                  type="radio"
+                  name="lancar"
+                  value={k.value}
+                  className="peer sr-only"
+                  defaultChecked={k.value === 'true'}
+                />
+                <span className="px-4 py-1.5 border border-line rounded-lg text-sm text-ink-700 peer-checked:bg-forest-700 peer-checked:text-cream-50 peer-checked:border-forest-700 transition">
+                  {k.label}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div>
         <label className="block text-xs font-medium text-ink-700 mb-2">
-          Kualitas
+          Nilai
         </label>
         <div className="flex flex-wrap gap-2">
-          {[
-            { value: 'lancar', label: 'Lancar' },
-            { value: 'cukup', label: 'Cukup' },
-            { value: 'ulang', label: 'Perlu diulang' },
-          ].map((k) => (
-            <label
-              key={k.value}
-              className="cursor-pointer inline-flex items-center gap-2"
-            >
+          {nilaiOptions.map((k) => (
+            <label key={k.value} className="cursor-pointer inline-flex">
               <input
                 type="radio"
                 name="kualitas"
                 value={k.value}
                 className="peer sr-only"
-                defaultChecked={k.value === 'lancar'}
+                defaultChecked={k.value === 'sedang'}
               />
               <span className="px-4 py-1.5 border border-line rounded-lg text-sm text-ink-700 peer-checked:bg-forest-700 peer-checked:text-cream-50 peer-checked:border-forest-700 transition">
                 {k.label}
@@ -435,12 +802,12 @@ function ProgresForm({
 
       <div>
         <label className="block text-xs font-medium text-ink-700 mb-1.5">
-          Catatan (opsional)
+          Catatan / Keterangan (opsional)
         </label>
         <textarea
           name="catatan"
-          rows={3}
-          placeholder="Tajwid perlu diperhatikan..."
+          rows={2}
+          placeholder="..."
           className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700 resize-none"
         />
       </div>
@@ -485,6 +852,11 @@ function ProgresCard({
 
   const summary: string[] = []
   if (progresType === 'tahfiz') {
+    if (progres.jenis_setoran) {
+      summary.push(
+        jenisSetoranLabel[progres.jenis_setoran] ?? progres.jenis_setoran
+      )
+    }
     if (progres.surah_mulai || progres.surah_selesai) {
       const mulai = [progres.surah_mulai, progres.ayat_mulai]
         .filter(Boolean)
@@ -507,31 +879,74 @@ function ProgresCard({
     if (progres.iqro_halaman) summary.push(`Hal ${progres.iqro_halaman}`)
   }
 
+  const nilaiVariant = getNilaiVariant(progres.kualitas)
+  const nilaiClass =
+    nilaiVariant === 'success'
+      ? 'bg-success-500/10 text-success-500 border-success-500/30'
+      : nilaiVariant === 'error'
+      ? 'bg-error-500/10 text-error-500 border-error-500/30'
+      : nilaiVariant === 'copper'
+      ? 'bg-copper-500/10 text-copper-600 border-copper-500/30'
+      : 'bg-cream-100 text-ink-500 border-line'
+
   return (
     <div className="bg-cream-50 border border-line rounded-xl p-5">
       <div className="flex items-start justify-between gap-4 mb-2">
         <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <div className="text-sm font-medium text-forest-800">
               {formatTanggal(progres.tanggal)}
             </div>
             {progres.kualitas && (
               <span
-                className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded ${
-                  progres.kualitas === 'lancar'
-                    ? 'bg-success-500/10 text-success-500 border border-success-500/30'
-                    : progres.kualitas === 'ulang'
-                    ? 'bg-error-500/10 text-error-500 border border-error-500/30'
-                    : 'bg-copper-500/10 text-copper-600 border border-copper-500/30'
-                }`}
+                className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded border ${nilaiClass}`}
               >
                 {kualitasLabel[progres.kualitas] ?? progres.kualitas}
+              </span>
+            )}
+            {progresType !== 'kitab' && progres.lancar !== null && (
+              <span
+                className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded border ${
+                  progres.lancar
+                    ? 'bg-success-500/10 text-success-500 border-success-500/30'
+                    : 'bg-error-500/10 text-error-500 border-error-500/30'
+                }`}
+              >
+                {progres.lancar ? 'Lancar' : 'Tidak lancar'}
+              </span>
+            )}
+            {progresType === 'kitab' && progres.absen !== null && (
+              <span
+                className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded border ${
+                  progres.absen === false
+                    ? 'bg-success-500/10 text-success-500 border-success-500/30'
+                    : 'bg-error-500/10 text-error-500 border-error-500/30'
+                }`}
+              >
+                {progres.absen === false ? 'Hadir' : 'Tidak hadir'}
+              </span>
+            )}
+            {progresType === 'kitab' && progres.tersampaikan !== null && (
+              <span
+                className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded border ${
+                  progres.tersampaikan
+                    ? 'bg-success-500/10 text-success-500 border-success-500/30'
+                    : 'bg-copper-500/10 text-copper-600 border-copper-500/30'
+                }`}
+              >
+                {progres.tersampaikan ? 'Tersampaikan' : 'Belum sampai'}
               </span>
             )}
           </div>
           {summary.length > 0 && (
             <div className="text-sm text-ink-700 mb-1">
               {summary.join(' · ')}
+            </div>
+          )}
+          {progres.kendala && (
+            <div className="text-sm text-ink-500 mt-2">
+              <span className="text-ink-400 text-xs">Kendala: </span>
+              {progres.kendala}
             </div>
           )}
           {progres.catatan && (
