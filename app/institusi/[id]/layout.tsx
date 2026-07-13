@@ -103,11 +103,11 @@ export default async function InstitusiLayout({
           </NavItem>
           {isAdmin && (
             <>
-              <NavItem href={`/institusi/${institusi.id}/pengajar`}>
-                Pengajar
-              </NavItem>
               <NavItem href={`/institusi/${institusi.id}/kategori`}>
                 Kategori
+              </NavItem>
+              <NavItem href={`/institusi/${institusi.id}/laporan`}>
+                Laporan
               </NavItem>
             </>
           )}
