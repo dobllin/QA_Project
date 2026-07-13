@@ -2,7 +2,13 @@
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
-import { createProgres, deleteProgres, addPoinLog, deletePoinLog } from './actions'
+import {
+  createProgres,
+  deleteProgres,
+  updateProgres,
+  addPoinLog,
+  deletePoinLog,
+} from './actions'
 
 type Santri = {
   id: string
@@ -133,6 +139,7 @@ export default function SantriDetailClient({
   poinLog,
   institusiId,
   isAdmin,
+  isPondok,
 }: {
   santri: Santri
   kategoriList: Kategori[]
@@ -140,6 +147,7 @@ export default function SantriDetailClient({
   poinLog: PoinLogEntry[]
   institusiId: number
   isAdmin: boolean
+  isPondok: boolean
 }) {
   const [activeKategoriId, setActiveKategoriId] = useState<number>(
     kategoriList[0]?.id ?? 0
@@ -187,15 +195,17 @@ export default function SantriDetailClient({
 
       <div className="divider-double mb-8" />
 
-      {/* POIN SECTION */}
-      <PoinSection
-        santriId={santri.id}
-        poin={santri.poin ?? 100}
-        poinLog={poinLog}
-        institusiId={institusiId}
-      />
-
-      <div className="divider-double mb-8 mt-8" />
+      {(isPondok || isAdmin) && (
+        <>
+          <PoinSection
+            santriId={santri.id}
+            poin={santri.poin ?? 100}
+            poinLog={poinLog}
+            institusiId={institusiId}
+          />
+          <div className="divider-double mb-8 mt-8" />
+        </>
+      )}
 
       {kategoriList.length === 0 ? (
         <div className="bg-cream-50 border border-line rounded-xl p-8 text-center">
@@ -252,6 +262,7 @@ export default function SantriDetailClient({
                     kategoriId={activeKategori.id}
                     kategoriNama={activeKategori.nama}
                     institusiId={institusiId}
+                    isAdmin={isAdmin}
                   />
                 )}
               </div>
@@ -272,7 +283,9 @@ export default function SantriDetailClient({
                       <ProgresCard
                         key={p.id}
                         progres={p}
-                        progresType={getProgresType(activeKategori.nama)}
+                        progresType={
+                          isAdmin ? 'tahfiz' : getProgresType(activeKategori.nama)
+                        }
                         institusiId={institusiId}
                         isAdmin={isAdmin}
                       />
@@ -494,18 +507,20 @@ function ProgresForm({
   kategoriId,
   kategoriNama,
   institusiId,
+  isAdmin,
 }: {
   santriId: string
   kategoriId: number
   kategoriNama: string
   institusiId: number
+  isAdmin: boolean
 }) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [formKey, setFormKey] = useState(0)
 
-  const progresType = getProgresType(kategoriNama)
+  const progresType: ProgresType = isAdmin ? 'tahfiz' : getProgresType(kategoriNama)
 
   return (
     <form
@@ -849,6 +864,27 @@ function ProgresCard({
   isAdmin: boolean
 }) {
   const [isPending, startTransition] = useTransition()
+  const [isEditing, setIsEditing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (isEditing) {
+    return (
+      <ProgresEditForm
+        progres={progres}
+        progresType={progresType}
+        institusiId={institusiId}
+        onCancel={() => {
+          setIsEditing(false)
+          setError(null)
+        }}
+        onSuccess={() => {
+          setIsEditing(false)
+          setError(null)
+        }}
+        onError={(msg) => setError(msg)}
+      />
+    )
+  }
 
   const summary: string[] = []
   if (progresType === 'tahfiz') {
@@ -960,20 +996,392 @@ function ProgresCard({
             </div>
           )}
         </div>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <button
+            onClick={() => setIsEditing(true)}
+            className="text-xs text-forest-700 hover:underline"
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => {
+              if (confirm('Hapus setoran ini?')) {
+                startTransition(async () => {
+                  await deleteProgres(institusiId, progres.id)
+                })
+              }
+            }}
+            disabled={isPending}
+            className="text-xs text-error-500 hover:underline disabled:opacity-50"
+          >
+            Hapus
+          </button>
+        </div>
+      </div>
+      {error && (
+        <div className="mt-2 p-2 bg-error-50 border border-error-500/30 rounded-lg text-xs text-error-500">
+          {error}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ProgresEditForm({
+  progres,
+  progresType,
+  institusiId,
+  onCancel,
+  onSuccess,
+  onError,
+}: {
+  progres: Progres
+  progresType: ProgresType
+  institusiId: number
+  onCancel: () => void
+  onSuccess: () => void
+  onError: (msg: string) => void
+}) {
+  const [isPending, startTransition] = useTransition()
+
+  return (
+    <form
+      action={(fd) => {
+        startTransition(async () => {
+          const result = await updateProgres(institusiId, progres.id, fd)
+          if (result?.error) onError(result.error)
+          else onSuccess()
+        })
+      }}
+      className="bg-cream-50 border border-forest-700/50 rounded-xl p-5 space-y-4"
+    >
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-copper-600">
+          Edit setoran
+        </div>
         <button
-          onClick={() => {
-            if (confirm('Hapus setoran ini?')) {
-              startTransition(async () => {
-                await deleteProgres(institusiId, progres.id)
-              })
-            }
-          }}
-          disabled={isPending}
-          className="text-xs text-error-500 hover:underline disabled:opacity-50 shrink-0"
+          type="button"
+          onClick={onCancel}
+          className="text-xs text-ink-500 hover:text-ink-900"
         >
-          Hapus
+          Batal
         </button>
       </div>
-    </div>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs font-medium text-ink-700 mb-1.5">
+            Tanggal
+          </label>
+          <input
+            name="tanggal"
+            type="date"
+            required
+            defaultValue={progres.tanggal.split('T')[0]}
+            className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+          />
+        </div>
+        {progresType === 'tahfiz' && (
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">
+              Jenis kegiatan
+            </label>
+            <select
+              name="jenis_setoran"
+              defaultValue={progres.jenis_setoran ?? 'hafalan_baru'}
+              className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+            >
+              {jenisSetoranOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {progresType === 'tahfiz' && (
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">
+              Surah mulai
+            </label>
+            <input
+              name="surah_mulai"
+              defaultValue={progres.surah_mulai ?? ''}
+              className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">
+              Ayat mulai
+            </label>
+            <input
+              name="ayat_mulai"
+              type="number"
+              min="1"
+              defaultValue={progres.ayat_mulai ?? ''}
+              className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">
+              Surah selesai
+            </label>
+            <input
+              name="surah_selesai"
+              defaultValue={progres.surah_selesai ?? ''}
+              className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">
+              Ayat selesai
+            </label>
+            <input
+              name="ayat_selesai"
+              type="number"
+              min="1"
+              defaultValue={progres.ayat_selesai ?? ''}
+              className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+            />
+          </div>
+        </div>
+      )}
+
+      {progresType === 'kitab' && (
+        <>
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-2">
+              Absen
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { value: 'false', label: 'Hadir' },
+                { value: 'true', label: 'Tidak hadir' },
+              ].map((k) => (
+                <label key={k.value} className="cursor-pointer inline-flex">
+                  <input
+                    type="radio"
+                    name="absen"
+                    value={k.value}
+                    className="peer sr-only"
+                    defaultChecked={
+                      progres.absen === null
+                        ? k.value === 'false'
+                        : String(progres.absen) === k.value
+                    }
+                  />
+                  <span className="px-4 py-1.5 border border-line rounded-lg text-sm text-ink-700 peer-checked:bg-forest-700 peer-checked:text-cream-50 peer-checked:border-forest-700 transition">
+                    {k.label}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-ink-700 mb-1.5">
+                Nama kitab
+              </label>
+              <input
+                name="kitab_nama"
+                defaultValue={progres.kitab_nama ?? ''}
+                className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink-700 mb-1.5">
+                Bab
+              </label>
+              <input
+                name="bab"
+                defaultValue={progres.bab ?? ''}
+                className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink-700 mb-1.5">
+                Halaman mulai
+              </label>
+              <input
+                name="halaman_mulai"
+                type="number"
+                min="1"
+                defaultValue={progres.halaman_mulai ?? ''}
+                className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink-700 mb-1.5">
+                Halaman selesai
+              </label>
+              <input
+                name="halaman_selesai"
+                type="number"
+                min="1"
+                defaultValue={progres.halaman_selesai ?? ''}
+                className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">
+              Kendala
+            </label>
+            <textarea
+              name="kendala"
+              rows={2}
+              defaultValue={progres.kendala ?? ''}
+              className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700 resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-2">
+              Materi tersampaikan?
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { value: 'true', label: 'Ya, tersampaikan' },
+                { value: 'false', label: 'Tidak' },
+              ].map((k) => (
+                <label key={k.value} className="cursor-pointer inline-flex">
+                  <input
+                    type="radio"
+                    name="tersampaikan"
+                    value={k.value}
+                    className="peer sr-only"
+                    defaultChecked={
+                      progres.tersampaikan === null
+                        ? k.value === 'true'
+                        : String(progres.tersampaikan) === k.value
+                    }
+                  />
+                  <span className="px-4 py-1.5 border border-line rounded-lg text-sm text-ink-700 peer-checked:bg-forest-700 peer-checked:text-cream-50 peer-checked:border-forest-700 transition">
+                    {k.label}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {progresType === 'iqro' && (
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">
+              Jilid
+            </label>
+            <input
+              name="iqro_jilid"
+              type="number"
+              min="1"
+              max="6"
+              defaultValue={progres.iqro_jilid ?? ''}
+              className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">
+              Halaman
+            </label>
+            <input
+              name="iqro_halaman"
+              type="number"
+              min="1"
+              defaultValue={progres.iqro_halaman ?? ''}
+              className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+            />
+          </div>
+        </div>
+      )}
+
+      {progresType !== 'kitab' && (
+        <div>
+          <label className="block text-xs font-medium text-ink-700 mb-2">
+            Kelancaran
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: 'true', label: 'Lancar' },
+              { value: 'false', label: 'Tidak lancar' },
+            ].map((k) => (
+              <label key={k.value} className="cursor-pointer inline-flex">
+                <input
+                  type="radio"
+                  name="lancar"
+                  value={k.value}
+                  className="peer sr-only"
+                  defaultChecked={
+                    progres.lancar === null
+                      ? k.value === 'true'
+                      : String(progres.lancar) === k.value
+                  }
+                />
+                <span className="px-4 py-1.5 border border-line rounded-lg text-sm text-ink-700 peer-checked:bg-forest-700 peer-checked:text-cream-50 peer-checked:border-forest-700 transition">
+                  {k.label}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <label className="block text-xs font-medium text-ink-700 mb-2">
+          Nilai
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {nilaiOptions.map((k) => (
+            <label key={k.value} className="cursor-pointer inline-flex">
+              <input
+                type="radio"
+                name="kualitas"
+                value={k.value}
+                className="peer sr-only"
+                defaultChecked={(progres.kualitas ?? 'sedang') === k.value}
+              />
+              <span className="px-4 py-1.5 border border-line rounded-lg text-sm text-ink-700 peer-checked:bg-forest-700 peer-checked:text-cream-50 peer-checked:border-forest-700 transition">
+                {k.label}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-ink-700 mb-1.5">
+          Catatan / Keterangan (opsional)
+        </label>
+        <textarea
+          name="catatan"
+          rows={2}
+          defaultValue={progres.catatan ?? ''}
+          className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700 resize-none"
+        />
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="bg-forest-700 hover:bg-forest-800 disabled:opacity-50 text-cream-50 text-sm font-medium px-5 py-2 rounded-lg transition"
+        >
+          {isPending ? 'Menyimpan...' : 'Simpan perubahan'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-sm text-ink-500 hover:text-ink-900"
+        >
+          Batal
+        </button>
+      </div>
+    </form>
   )
 }

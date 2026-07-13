@@ -51,7 +51,7 @@ export default async function SantriDetailPage({
   let query = supabase
     .from('ustadz_santri')
     .select(
-      'kategori_id, ustadz_id, kategori(id, nama), profiles:ustadz_id(nama)'
+      'kategori_id, ustadz_id, kategori(id, nama, custom_fields), profiles:ustadz_id(nama)'
     )
     .eq('santri_id', santriId)
 
@@ -61,27 +61,62 @@ export default async function SantriDetailPage({
 
   const { data: assignments } = await query
 
-  if (!assignments || assignments.length === 0) {
-    notFound()
-  }
-
   const kategoriMap = new Map<
     number,
-    { id: number; nama: string; ustadzNames: string[] }
+    {
+      id: number
+      nama: string
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      customFields: any[]
+      ustadzNames: string[]
+    }
   >()
-  for (const a of assignments) {
+  for (const a of assignments ?? []) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const k = a.kategori as any
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const u = a.profiles as any
     if (!k) continue
     if (!kategoriMap.has(k.id)) {
-      kategoriMap.set(k.id, { id: k.id, nama: k.nama, ustadzNames: [] })
+      kategoriMap.set(k.id, {
+        id: k.id,
+        nama: k.nama,
+        customFields: Array.isArray(k.custom_fields) ? k.custom_fields : [],
+        ustadzNames: [],
+      })
     }
     if (u?.nama) {
       kategoriMap.get(k.id)!.ustadzNames.push(u.nama)
     }
   }
+
+  // FALLBACK: kalau admin & santri belum ada assignment sama sekali,
+  // tampilin semua kategori institusi sebagai tab biar admin bisa input setoran.
+  if (isAdmin && kategoriMap.size === 0) {
+    const { data: allKategori } = await supabase
+      .from('kategori')
+      .select('id, nama, custom_fields')
+      .eq('institusi_id', institusiId)
+      .order('nama')
+
+    for (const k of allKategori ?? []) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const kAny = k as any
+      kategoriMap.set(kAny.id, {
+        id: kAny.id,
+        nama: kAny.nama,
+        customFields: Array.isArray(kAny.custom_fields)
+          ? kAny.custom_fields
+          : [],
+        ustadzNames: [],
+      })
+    }
+  }
+
+  if (kategoriMap.size === 0 && !isAdmin) {
+    notFound()
+  }
+
   const kategoriList = Array.from(kategoriMap.values())
 
   let progressQuery = supabase
@@ -94,7 +129,7 @@ export default async function SantriDetailPage({
       kitab_nama, bab, halaman_mulai, halaman_selesai,
       absen, kendala, tersampaikan,
       iqro_jilid, iqro_halaman,
-      kualitas, catatan,
+      kualitas, catatan, custom_values,
       profiles:ustadz_id(nama)
     `
     )
@@ -108,7 +143,6 @@ export default async function SantriDetailPage({
 
   const { data: progressHistory } = await progressQuery
 
-  // Fetch poin log HANYA kalau Pondok
   const poinLog = isPondok
     ? (
         await supabase

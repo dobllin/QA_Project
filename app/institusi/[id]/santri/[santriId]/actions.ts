@@ -4,6 +4,20 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 
+type CustomField = {
+  key: string
+  label: string
+  type: 'text' | 'number' | 'select'
+  options?: string[]
+}
+
+/**
+ * Cek: user boleh input setoran untuk santri di kategori ini?
+ * Boleh kalau:
+ *   1. Super admin, ATAU
+ *   2. Ustadz yang di-assign ke santri+kategori ini, ATAU
+ *   3. Admin institusi tempat santri ini terdaftar
+ */
 async function assertCanInputProgress(
   santriId: string,
   kategoriId: number
@@ -22,6 +36,7 @@ async function assertCanInputProgress(
 
   if (profile?.is_super_admin) return user.id
 
+  // Cek ustadz assignment
   const { data: assignment } = await supabase
     .from('ustadz_santri')
     .select('id')
@@ -30,14 +45,29 @@ async function assertCanInputProgress(
     .eq('kategori_id', kategoriId)
     .maybeSingle()
 
-  if (!assignment) {
-    throw new Error('Kamu bukan pengampu santri ini di kategori terpilih')
+  if (assignment) return user.id
+
+  // Fallback: cek admin institusi
+  const { data: santri } = await supabase
+    .from('santri')
+    .select('institusi_id')
+    .eq('id', santriId)
+    .single()
+
+  if (santri) {
+    const { data: adminCheck } = await supabase
+      .from('user_institusi')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('institusi_id', santri.institusi_id)
+      .eq('peran', 'admin')
+
+    if (adminCheck && adminCheck.length > 0) return user.id
   }
 
-  return user.id
+  throw new Error('Kamu bukan pengampu santri ini di kategori terpilih')
 }
 
-// Assert user can manage poin for santri (admin institusi or ustadz who teaches)
 async function assertCanManagePoin(santriId: string): Promise<string> {
   const supabase = await createClient()
   const {
@@ -84,6 +114,40 @@ async function assertCanManagePoin(santriId: string): Promise<string> {
   return user.id
 }
 
+async function extractCustomValues(
+  kategoriId: number,
+  formData: FormData
+): Promise<Record<string, string | number | null>> {
+  const admin = createAdminClient()
+  const { data: kat } = await admin
+    .from('kategori')
+    .select('custom_fields')
+    .eq('id', kategoriId)
+    .single()
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fields = Array.isArray((kat as any)?.custom_fields)
+    ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ((kat as any).custom_fields as CustomField[])
+    : []
+
+  const values: Record<string, string | number | null> = {}
+  for (const f of fields) {
+    const raw = formData.get(`custom_${f.key}`)
+    if (raw === null || raw === undefined || raw === '') {
+      values[f.key] = null
+      continue
+    }
+    if (f.type === 'number') {
+      const n = Number(raw)
+      values[f.key] = Number.isNaN(n) ? null : n
+    } else {
+      values[f.key] = String(raw).trim() || null
+    }
+  }
+  return values
+}
+
 export async function createProgres(
   institusiId: number,
   santriId: string,
@@ -115,6 +179,8 @@ export async function createProgres(
     return null
   }
 
+  const customValues = await extractCustomValues(kategoriId, formData)
+
   const admin = createAdminClient()
   const { error } = await admin.from('progress').insert({
     santri_id: santriId,
@@ -122,35 +188,125 @@ export async function createProgres(
     kategori_id: kategoriId,
     institusi_id: institusiId,
     tanggal,
-
     jenis_setoran: asText('jenis_setoran'),
     lancar: asBool('lancar'),
-
     surah_mulai: asText('surah_mulai'),
     ayat_mulai: asInt('ayat_mulai'),
     surah_selesai: asText('surah_selesai'),
     ayat_selesai: asInt('ayat_selesai'),
-
     kitab_nama: asText('kitab_nama'),
     bab: asText('bab'),
     halaman_mulai: asInt('halaman_mulai'),
     halaman_selesai: asInt('halaman_selesai'),
-
-    // Kitab: field baru
     absen: asBool('absen'),
     kendala: asText('kendala'),
     tersampaikan: asBool('tersampaikan'),
-
     iqro_jilid: asInt('iqro_jilid'),
     iqro_halaman: asInt('iqro_halaman'),
-
     kualitas: asText('kualitas'),
     catatan: asText('catatan'),
+    custom_values: customValues,
   })
 
   if (error) return { error: error.message }
 
   revalidatePath(`/institusi/${institusiId}/santri/${santriId}`)
+  revalidatePath(`/institusi/${institusiId}/santri`)
+  return { success: true }
+}
+
+export async function updateProgres(
+  institusiId: number,
+  progresId: string,
+  formData: FormData
+) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Tidak masuk')
+
+  const { data: progres } = await supabase
+    .from('progress')
+    .select('ustadz_id, santri_id, institusi_id, kategori_id')
+    .eq('id', progresId)
+    .single()
+
+  if (!progres) return { error: 'Data tidak ditemukan' }
+  if (progres.institusi_id !== institusiId) {
+    return { error: 'Data tidak valid' }
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_super_admin')
+    .eq('id', user.id)
+    .single()
+
+  const isSuperAdmin = profile?.is_super_admin ?? false
+
+  if (!isSuperAdmin && progres.ustadz_id !== user.id) {
+    const { data: adminCheck } = await supabase
+      .from('user_institusi')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('institusi_id', progres.institusi_id)
+      .eq('peran', 'admin')
+
+    if (!adminCheck || adminCheck.length === 0) {
+      return { error: 'Tidak diizinkan' }
+    }
+  }
+
+  const asText = (key: string): string | null => {
+    const v = String(formData.get(key) ?? '').trim()
+    return v || null
+  }
+  const asInt = (key: string): number | null => {
+    const raw = formData.get(key)
+    if (!raw) return null
+    const n = Number(raw)
+    return Number.isNaN(n) ? null : n
+  }
+  const asBool = (key: string): boolean | null => {
+    const raw = formData.get(key)
+    if (raw === 'true') return true
+    if (raw === 'false') return false
+    return null
+  }
+
+  const tanggalRaw = String(formData.get('tanggal') ?? '').trim()
+  const customValues = await extractCustomValues(progres.kategori_id, formData)
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('progress')
+    .update({
+      ...(tanggalRaw ? { tanggal: tanggalRaw } : {}),
+      jenis_setoran: asText('jenis_setoran'),
+      lancar: asBool('lancar'),
+      surah_mulai: asText('surah_mulai'),
+      ayat_mulai: asInt('ayat_mulai'),
+      surah_selesai: asText('surah_selesai'),
+      ayat_selesai: asInt('ayat_selesai'),
+      kitab_nama: asText('kitab_nama'),
+      bab: asText('bab'),
+      halaman_mulai: asInt('halaman_mulai'),
+      halaman_selesai: asInt('halaman_selesai'),
+      absen: asBool('absen'),
+      kendala: asText('kendala'),
+      tersampaikan: asBool('tersampaikan'),
+      iqro_jilid: asInt('iqro_jilid'),
+      iqro_halaman: asInt('iqro_halaman'),
+      kualitas: asText('kualitas'),
+      catatan: asText('catatan'),
+      custom_values: customValues,
+    })
+    .eq('id', progresId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/institusi/${institusiId}/santri/${progres.santri_id}`)
   revalidatePath(`/institusi/${institusiId}/santri`)
   return { success: true }
 }
@@ -228,7 +384,6 @@ export async function addPoinLog(
 
   const admin = createAdminClient()
 
-  // Insert log
   const { error: logError } = await admin.from('poin_log').insert({
     santri_id: santriId,
     ustadz_id: ustadzId,
@@ -239,7 +394,6 @@ export async function addPoinLog(
 
   if (logError) return { error: logError.message }
 
-  // Update santri.poin
   const { data: currentSantri } = await admin
     .from('santri')
     .select('poin')
@@ -284,7 +438,6 @@ export async function deletePoinLog(
 
   const admin = createAdminClient()
 
-  // Delete log
   const { error: deleteError } = await admin
     .from('poin_log')
     .delete()
@@ -292,7 +445,6 @@ export async function deletePoinLog(
 
   if (deleteError) return { error: deleteError.message }
 
-  // Revert poin
   const { data: currentSantri } = await admin
     .from('santri')
     .select('poin')

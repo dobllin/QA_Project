@@ -1,0 +1,106 @@
+// ============================================================
+// TAMBAHKAN INI DI PALING BAWAH FILE:
+// app/institusi/[id]/santri/[santriId]/actions.ts
+// ============================================================
+// (Fungsi ini pakai import & helper yang udah ada di file itu, jadi
+//  gak perlu import tambahan)
+
+export async function updateProgres(
+  institusiId: number,
+  progresId: string,
+  formData: FormData
+) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Tidak masuk')
+
+  const { data: progres } = await supabase
+    .from('progress')
+    .select('ustadz_id, santri_id, institusi_id, kategori_id')
+    .eq('id', progresId)
+    .single()
+
+  if (!progres) return { error: 'Data tidak ditemukan' }
+  if (progres.institusi_id !== institusiId) {
+    return { error: 'Data tidak valid' }
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_super_admin')
+    .eq('id', user.id)
+    .single()
+
+  const isSuperAdmin = profile?.is_super_admin ?? false
+
+  // Yang boleh edit: super admin, ustadz yg input aslinya, atau admin institusi
+  if (!isSuperAdmin && progres.ustadz_id !== user.id) {
+    const { data: adminCheck } = await supabase
+      .from('user_institusi')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('institusi_id', progres.institusi_id)
+      .eq('peran', 'admin')
+
+    if (!adminCheck || adminCheck.length === 0) {
+      return { error: 'Tidak diizinkan' }
+    }
+  }
+
+  const asText = (key: string): string | null => {
+    const v = String(formData.get(key) ?? '').trim()
+    return v || null
+  }
+  const asInt = (key: string): number | null => {
+    const raw = formData.get(key)
+    if (!raw) return null
+    const n = Number(raw)
+    return Number.isNaN(n) ? null : n
+  }
+  const asBool = (key: string): boolean | null => {
+    const raw = formData.get(key)
+    if (raw === 'true') return true
+    if (raw === 'false') return false
+    return null
+  }
+
+  const tanggalRaw = String(formData.get('tanggal') ?? '').trim()
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('progress')
+    .update({
+      ...(tanggalRaw ? { tanggal: tanggalRaw } : {}),
+      jenis_setoran: asText('jenis_setoran'),
+      lancar: asBool('lancar'),
+
+      surah_mulai: asText('surah_mulai'),
+      ayat_mulai: asInt('ayat_mulai'),
+      surah_selesai: asText('surah_selesai'),
+      ayat_selesai: asInt('ayat_selesai'),
+
+      kitab_nama: asText('kitab_nama'),
+      bab: asText('bab'),
+      halaman_mulai: asInt('halaman_mulai'),
+      halaman_selesai: asInt('halaman_selesai'),
+
+      absen: asBool('absen'),
+      kendala: asText('kendala'),
+      tersampaikan: asBool('tersampaikan'),
+
+      iqro_jilid: asInt('iqro_jilid'),
+      iqro_halaman: asInt('iqro_halaman'),
+
+      kualitas: asText('kualitas'),
+      catatan: asText('catatan'),
+    })
+    .eq('id', progresId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/institusi/${institusiId}/santri/${progres.santri_id}`)
+  revalidatePath(`/institusi/${institusiId}/santri`)
+  return { success: true }
+}
