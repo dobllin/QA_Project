@@ -52,6 +52,17 @@ export default function SantriClient({
   const [showForm, setShowForm] = useState(false)
   const isPondok = institusi.jenis === 'PONPES'
 
+  // Kartu: Santri, Kategori, [Pengajar - admin], Progres, [Rata-rata poin - pondok].
+  // Kelas Tailwind harus string utuh, jangan di-interpolasi (`lg:grid-cols-${n}`
+  // gak kedetect purge-nya).
+  const cardCount = 3 + (isAdmin ? 1 : 0) + (isPondok ? 1 : 0)
+  const gridCols =
+    cardCount === 5
+      ? 'lg:grid-cols-5'
+      : cardCount === 4
+      ? 'lg:grid-cols-4'
+      : 'lg:grid-cols-3'
+
   const avgPoinClass =
     stats.avgPoin >= 100
       ? 'text-success-500'
@@ -87,14 +98,10 @@ export default function SantriClient({
 
       <div className="divider-double mb-8" />
 
-      <div
-        className={`grid grid-cols-2 ${
-          isPondok ? 'lg:grid-cols-5' : 'lg:grid-cols-4'
-        } gap-3 mb-8`}
-      >
+      <div className={`grid grid-cols-2 ${gridCols} gap-3 mb-8`}>
         <div className="bg-cream-50 border border-line rounded-xl p-4">
           <div className="text-[10px] text-ink-500 mb-1 uppercase tracking-wider">
-            Santri
+            {isAdmin ? 'Santri' : 'Santri ampuan'}
           </div>
           <div className="font-display text-2xl text-forest-800">
             {stats.santriCount}
@@ -102,23 +109,25 @@ export default function SantriClient({
         </div>
         <div className="bg-cream-50 border border-line rounded-xl p-4">
           <div className="text-[10px] text-ink-500 mb-1 uppercase tracking-wider">
-            Kategori
+            {isAdmin ? 'Kategori' : 'Kategori saya'}
           </div>
           <div className="font-display text-2xl text-forest-800">
             {stats.kategoriCount}
           </div>
         </div>
+        {isAdmin && (
+          <div className="bg-cream-50 border border-line rounded-xl p-4">
+            <div className="text-[10px] text-ink-500 mb-1 uppercase tracking-wider">
+              Pengajar
+            </div>
+            <div className="font-display text-2xl text-forest-800">
+              {stats.pengajarCount}
+            </div>
+          </div>
+        )}
         <div className="bg-cream-50 border border-line rounded-xl p-4">
           <div className="text-[10px] text-ink-500 mb-1 uppercase tracking-wider">
-            Pengajar
-          </div>
-          <div className="font-display text-2xl text-forest-800">
-            {stats.pengajarCount}
-          </div>
-        </div>
-        <div className="bg-cream-50 border border-line rounded-xl p-4">
-          <div className="text-[10px] text-ink-500 mb-1 uppercase tracking-wider">
-            Progres bulan ini
+            {isAdmin ? 'Progres bulan ini' : 'Setoran saya bulan ini'}
           </div>
           <div className="font-display text-2xl text-forest-800">
             {stats.progresBulanIni}
@@ -153,7 +162,7 @@ export default function SantriClient({
             <p className="text-sm text-ink-500">
               {isAdmin
                 ? 'Belum ada santri. Klik "Tambah santri" untuk memulai.'
-                : 'Belum ada santri terdaftar di institusi ini.'}
+                : 'Belum ada santri yang ditugaskan ke kamu di institusi ini. Hubungi admin institusi.'}
             </p>
           </div>
         ) : (
@@ -183,7 +192,9 @@ export default function SantriClient({
                       {s.tahun_masuk && <span>Masuk {s.tahun_masuk}</span>}
                       {s.kategoriCount > 0 && (
                         <span>
-                          {s.kategoriCount} kategori · {s.ustadzCount} pengajar
+                          {isAdmin
+                            ? `${s.kategoriCount} kategori · ${s.ustadzCount} pengajar`
+                            : `${s.kategoriCount} kategori saya ampu`}
                         </span>
                       )}
                     </div>

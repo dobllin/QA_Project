@@ -140,6 +140,7 @@ export default function SantriDetailClient({
   institusiId,
   isAdmin,
   isPondok,
+  initialKategoriId = null,
 }: {
   santri: Santri
   kategoriList: Kategori[]
@@ -148,10 +149,19 @@ export default function SantriDetailClient({
   institusiId: number
   isAdmin: boolean
   isPondok: boolean
+  initialKategoriId?: number | null
 }) {
-  const [activeKategoriId, setActiveKategoriId] = useState<number>(
-    kategoriList[0]?.id ?? 0
-  )
+  const [activeKategoriId, setActiveKategoriId] = useState<number>(() => {
+    // Dibuka dari checklist harian (?kategori=) → langsung ke tab itu.
+    // Divalidasi dulu ke kategoriList biar param ngaco gak bikin tab kosong.
+    if (
+      initialKategoriId &&
+      kategoriList.some((k) => k.id === initialKategoriId)
+    ) {
+      return initialKategoriId
+    }
+    return kategoriList[0]?.id ?? 0
+  })
   const [showForm, setShowForm] = useState(true)
 
   const activeKategori = kategoriList.find((k) => k.id === activeKategoriId)

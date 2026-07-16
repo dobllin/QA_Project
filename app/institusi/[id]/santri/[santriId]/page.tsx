@@ -4,11 +4,19 @@ import SantriDetailClient from './santri-detail-client'
 
 export default async function SantriDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; santriId: string }>
+  searchParams: Promise<{ kategori?: string }>
 }) {
   const { id, santriId } = await params
+  const sp = await searchParams
   const institusiId = Number(id)
+
+  // ?kategori=<id> dari checklist harian → tab langsung kebuka di kategori itu
+  const kategoriParam = sp.kategori ? Number(sp.kategori) : null
+  const initialKategoriId =
+    kategoriParam && !Number.isNaN(kategoriParam) ? kategoriParam : null
 
   const supabase = await createClient()
   const {
@@ -50,16 +58,20 @@ export default async function SantriDetailPage({
 
   let query = supabase
     .from('ustadz_santri')
-    .select(
-      'kategori_id, ustadz_id, kategori(id, nama, custom_fields), profiles:ustadz_id(nama)'
-    )
+    // custom_fields dibuang dari embed: SantriDetailClient gak pernah make-nya,
+    // tapi kalau kolomnya gak ada di DB, PostgREST bikin SELURUH query error →
+    // assignments null → kategoriMap kosong → notFound() alias 404.
+    .select('kategori_id, ustadz_id, kategori(id, nama), profiles:ustadz_id(nama)')
     .eq('santri_id', santriId)
 
   if (!isAdmin) {
     query = query.eq('ustadz_id', user.id)
   }
 
-  const { data: assignments } = await query
+  const { data: assignments, error: assignError } = await query
+  if (assignError) {
+    console.error('[santri detail] gagal ambil pengampuan:', assignError.message)
+  }
 
   const kategoriMap = new Map<
     number,
@@ -95,7 +107,7 @@ export default async function SantriDetailPage({
   if (isAdmin && kategoriMap.size === 0) {
     const { data: allKategori } = await supabase
       .from('kategori')
-      .select('id, nama, custom_fields')
+      .select('id, nama')
       .eq('institusi_id', institusiId)
       .order('nama')
 
@@ -167,6 +179,7 @@ export default async function SantriDetailPage({
       institusiId={institusiId}
       isAdmin={isAdmin}
       isPondok={isPondok}
+      initialKategoriId={initialKategoriId}
     />
   )
 }

@@ -208,10 +208,22 @@ export async function createProgres(
     custom_values: customValues,
   })
 
-  if (error) return { error: error.message }
+  if (error) {
+    // 23505 = unique violation dari index progress_harian_unik
+    // (santri_id, kategori_id, tanggal). Aturannya 1 setoran per hari.
+    if (error.code === '23505') {
+      return {
+        error:
+          'Setoran santri ini di kategori ini untuk tanggal tersebut sudah ada. Edit entri yang sudah ada, jangan input dua kali.',
+      }
+    }
+    return { error: error.message }
+  }
 
   revalidatePath(`/institusi/${institusiId}/santri/${santriId}`)
   revalidatePath(`/institusi/${institusiId}/santri`)
+  revalidatePath(`/institusi/${institusiId}/kategori`)
+  revalidatePath(`/institusi/${institusiId}`)
   return { success: true }
 }
 
@@ -304,10 +316,20 @@ export async function updateProgres(
     })
     .eq('id', progresId)
 
-  if (error) return { error: error.message }
+  if (error) {
+    if (error.code === '23505') {
+      return {
+        error:
+          'Sudah ada setoran lain untuk santri & kategori ini di tanggal tersebut.',
+      }
+    }
+    return { error: error.message }
+  }
 
   revalidatePath(`/institusi/${institusiId}/santri/${progres.santri_id}`)
   revalidatePath(`/institusi/${institusiId}/santri`)
+  revalidatePath(`/institusi/${institusiId}/kategori`)
+  revalidatePath(`/institusi/${institusiId}`)
   return { success: true }
 }
 
@@ -357,6 +379,8 @@ export async function deleteProgres(
 
   revalidatePath(`/institusi/${institusiId}/santri/${progres.santri_id}`)
   revalidatePath(`/institusi/${institusiId}/santri`)
+  revalidatePath(`/institusi/${institusiId}/kategori`)
+  revalidatePath(`/institusi/${institusiId}`)
   return { success: true }
 }
 

@@ -1,10 +1,15 @@
 import { createClient } from '@/utils/supabase/server'
+import Link from 'next/link'
 import AdminOverviewClient from './admin-overview-client'
 
 const jenisLabel: Record<string, string> = {
   RA: 'Raudhatul Athfal',
   TPQ: 'Taman Pendidikan Quran',
   PONPES: 'Pondok Pesantren',
+}
+
+function todayStr(): string {
+  return new Date().toISOString().split('T')[0]
 }
 
 function getWeekStart(): string {
@@ -200,6 +205,7 @@ async function UstadzOverview({
 }) {
   const supabase = await createClient()
   const weekStart = getWeekStart()
+  const hariIni = todayStr()
 
   const { data: myAssignments } = await supabase
     .from('ustadz_santri')
@@ -220,13 +226,37 @@ async function UstadzOverview({
       return santri?.institusi_id === institusiId
     }) ?? []
 
+  const [{ count: progresMingguIni }, { data: myProgress }, { data: todayProgres }] =
+    await Promise.all([
+      supabase
+        .from('progress')
+        .select('*', { count: 'exact', head: true })
+        .eq('ustadz_id', userId)
+        .eq('institusi_id', institusiId)
+        .gte('tanggal', weekStart),
+      supabase
+        .from('progress')
+        .select('absen, lancar')
+        .eq('ustadz_id', userId)
+        .eq('institusi_id', institusiId),
+      // Sengaja TIDAK difilter ustadz_id: aturannya 1 setoran per santri per
+      // kategori per hari. Kalau kategori diampu berdua, setoran rekan juga
+      // ngitung — biar cocok sama unique index di DB.
+      supabase
+        .from('progress')
+        .select('santri_id, kategori_id')
+        .eq('institusi_id', institusiId)
+        .eq('tanggal', hariIni),
+    ])
+
+  const doneToday = new Set(
+    (todayProgres ?? []).map((p) => `${p.santri_id}:${p.kategori_id}`)
+  )
+
+  type SantriChip = { id: string; nama: string; done: boolean }
   const kategoriMap = new Map<
     number,
-    {
-      kategori: { id: number; nama: string }
-      santriCount: number
-      santriNames: string[]
-    }
+    { id: number; nama: string; santri: SantriChip[] }
   >()
 
   for (const a of relevantAssignments) {
@@ -234,38 +264,35 @@ async function UstadzOverview({
     const k = a.kategori as any
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const s = a.santri as any
-    if (!k) continue
+    if (!k || !s) continue
     if (!kategoriMap.has(a.kategori_id)) {
-      kategoriMap.set(a.kategori_id, {
-        kategori: k,
-        santriCount: 0,
-        santriNames: [],
-      })
+      kategoriMap.set(a.kategori_id, { id: k.id, nama: k.nama, santri: [] })
     }
-    const entry = kategoriMap.get(a.kategori_id)!
-    entry.santriCount++
-    if (s?.nama) entry.santriNames.push(s.nama)
+    kategoriMap.get(a.kategori_id)!.santri.push({
+      id: s.id,
+      nama: s.nama,
+      done: doneToday.has(`${a.santri_id}:${a.kategori_id}`),
+    })
   }
 
   const kategoriList = Array.from(kategoriMap.values())
+    .map((k) => ({
+      ...k,
+      santri: k.santri.sort((a, b) => a.nama.localeCompare(b.nama)),
+      doneCount: k.santri.filter((s) => s.done).length,
+    }))
+    .sort((a, b) => a.nama.localeCompare(b.nama))
 
-  // Stats untuk ustadz
-  const [
-    { count: progresMingguIni },
-    { data: myProgress },
-  ] = await Promise.all([
-    supabase
-      .from('progress')
-      .select('*', { count: 'exact', head: true })
-      .eq('ustadz_id', userId)
-      .eq('institusi_id', institusiId)
-      .gte('tanggal', weekStart),
-    supabase
-      .from('progress')
-      .select('absen, lancar')
-      .eq('ustadz_id', userId)
-      .eq('institusi_id', institusiId),
-  ])
+  // 1 pengampuan (santri × kategori) = 1 setoran wajib per hari.
+  const totalTugasHarian = relevantAssignments.length
+  const selesaiHariIni = relevantAssignments.filter((a) =>
+    doneToday.has(`${a.santri_id}:${a.kategori_id}`)
+  ).length
+  const belumHariIni = totalTugasHarian - selesaiHariIni
+
+  // Santri UNIK. Sebelumnya kartu ini pakai relevantAssignments.length, jadi
+  // santri yang diampu di 2 kategori kehitung 2x.
+  const santriUnik = new Set(relevantAssignments.map((a) => a.santri_id)).size
 
   const absenData = (myProgress ?? []).filter((p) => p.absen !== null)
   const hadirCount = absenData.filter((p) => p.absen === false).length
@@ -280,6 +307,13 @@ async function UstadzOverview({
     lancarData.length > 0
       ? Math.round((lancarCount / lancarData.length) * 100)
       : null
+
+  const tugasClass =
+    totalTugasHarian === 0
+      ? 'text-forest-800'
+      : belumHariIni === 0
+      ? 'text-success-500'
+      : 'text-copper-600'
 
   return (
     <div>
@@ -297,11 +331,40 @@ async function UstadzOverview({
 
       <div className="divider-double mb-8" />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+      {totalTugasHarian > 0 && (
+        <div
+          className={`mb-8 rounded-xl border p-4 ${
+            belumHariIni === 0
+              ? 'border-success-500/30 bg-success-500/10'
+              : 'border-copper-500/30 bg-copper-500/10'
+          }`}
+        >
+          <div className="text-sm font-medium text-ink-900">
+            {belumHariIni === 0
+              ? `Semua setoran hari ini sudah diisi (${selesaiHariIni}/${totalTugasHarian})`
+              : `${belumHariIni} setoran belum diisi hari ini`}
+          </div>
+          {belumHariIni > 0 && (
+            <p className="mt-1 text-xs text-ink-500 leading-relaxed">
+              Tiap santri wajib diisi 1× sehari di setiap kategori yang kamu
+              ampu. Klik nama santri di bawah untuk langsung buka formnya.
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-10">
         <div className="bg-cream-50 border border-line rounded-xl p-5">
-          <div className="text-xs text-ink-500 mb-2">Total santri ampuan</div>
+          <div className="text-xs text-ink-500 mb-2">Santri ampuan</div>
           <div className="font-display text-3xl text-forest-800">
-            {relevantAssignments.length}
+            {santriUnik}
+          </div>
+        </div>
+        <div className="bg-cream-50 border border-line rounded-xl p-5">
+          <div className="text-xs text-ink-500 mb-2">Setoran hari ini</div>
+          <div className={`font-display text-3xl ${tugasClass}`}>
+            {selesaiHariIni}
+            <span className="text-xl text-ink-500">/{totalTugasHarian}</span>
           </div>
         </div>
         <div className="bg-cream-50 border border-line rounded-xl p-5">
@@ -325,9 +388,18 @@ async function UstadzOverview({
       </div>
 
       <div>
-        <h2 className="font-display text-2xl text-forest-800 mb-4">
-          Kategori yang saya ampu
-        </h2>
+        <div className="flex items-baseline justify-between gap-4 mb-4">
+          <h2 className="font-display text-2xl text-forest-800">
+            Kategori yang saya ampu
+          </h2>
+          <Link
+            href={`/institusi/${institusiId}/kategori`}
+            className="text-xs text-ink-500 hover:text-forest-800 transition shrink-0"
+          >
+            Lihat checklist lengkap →
+          </Link>
+        </div>
+
         {kategoriList.length === 0 ? (
           <div className="bg-cream-50 border border-line rounded-xl p-8 text-center">
             <p className="text-sm text-ink-500">
@@ -339,36 +411,49 @@ async function UstadzOverview({
           <div className="grid gap-3">
             {kategoriList.map((k) => (
               <div
-                key={k.kategori.id}
+                key={k.id}
                 className="bg-cream-50 border border-line rounded-xl p-5"
               >
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div>
                     <h3 className="font-display text-xl text-forest-800">
-                      {k.kategori.nama}
+                      {k.nama}
                     </h3>
                     <div className="text-xs text-ink-500 mt-1">
-                      {k.santriCount} santri
+                      {k.santri.length} santri
                     </div>
+                  </div>
+                  <span
+                    className={`text-[10px] font-medium uppercase tracking-wider px-2 py-1 rounded border shrink-0 ${
+                      k.doneCount === k.santri.length
+                        ? 'text-success-500 bg-success-500/10 border-success-500/30'
+                        : 'text-copper-600 bg-copper-500/10 border-copper-500/30'
+                    }`}
+                  >
+                    {k.doneCount}/{k.santri.length} hari ini
+                  </span>
+                </div>
+                <div className="pt-3 border-t border-line/60">
+                  <div className="text-[10px] uppercase tracking-widest text-ink-500 mb-2">
+                    Santri · klik untuk input setoran
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {k.santri.map((s) => (
+                      <Link
+                        key={s.id}
+                        href={`/institusi/${institusiId}/santri/${s.id}?kategori=${k.id}`}
+                        className={`text-xs border rounded-md px-2 py-1 transition ${
+                          s.done
+                            ? 'bg-success-500/10 border-success-500/30 text-success-500'
+                            : 'bg-cream-100 border-line text-ink-700 hover:border-forest-700 hover:text-forest-800'
+                        }`}
+                      >
+                        {s.done ? '✓ ' : ''}
+                        {s.nama}
+                      </Link>
+                    ))}
                   </div>
                 </div>
-                {k.santriNames.length > 0 && (
-                  <div className="pt-3 border-t border-line/60">
-                    <div className="text-[10px] uppercase tracking-widest text-ink-500 mb-2">
-                      Santri
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {k.santriNames.map((nama, i) => (
-                        <span
-                          key={i}
-                          className="text-xs bg-cream-100 border border-line rounded-md px-2 py-1 text-ink-700"
-                        >
-                          {nama}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             ))}
           </div>

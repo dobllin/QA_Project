@@ -101,15 +101,13 @@ export default async function InstitusiLayout({
           <NavItem href={`/institusi/${institusi.id}/santri`}>
             {isAdmin ? 'Semua santri' : 'Santri saya'}
           </NavItem>
+          <NavItem href={`/institusi/${institusi.id}/kategori`}>
+            {isAdmin ? 'Kategori' : 'Kategori saya'}
+          </NavItem>
           {isAdmin && (
-            <>
-              <NavItem href={`/institusi/${institusi.id}/kategori`}>
-                Kategori
-              </NavItem>
-              <NavItem href={`/institusi/${institusi.id}/laporan`}>
-                Laporan
-              </NavItem>
-            </>
+            <NavItem href={`/institusi/${institusi.id}/laporan`}>
+              Laporan
+            </NavItem>
           )}
           {isPondok && (
             <NavItem href={`/institusi/${institusi.id}/recap`}>Recap poin</NavItem>
