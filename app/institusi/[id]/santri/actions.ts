@@ -39,6 +39,7 @@ export async function createSantri(institusiId: number, formData: FormData) {
   const halaqoh = String(formData.get('halaqoh') ?? '').trim()
   const tahunMasukRaw = formData.get('tahun_masuk')
   const tahunMasuk = tahunMasukRaw ? Number(tahunMasukRaw) : null
+  const waliKelasId = String(formData.get('wali_kelas_id') ?? '').trim() || null
 
   if (!nama) return { error: 'Nama wajib diisi' }
 
@@ -48,6 +49,7 @@ export async function createSantri(institusiId: number, formData: FormData) {
     kelas: kelas || null,
     halaqoh: halaqoh || null,
     tahun_masuk: tahunMasuk,
+    wali_kelas_id: waliKelasId,
     institusi_id: institusiId,
   })
 
@@ -68,6 +70,7 @@ export async function updateSantri(
   const halaqoh = String(formData.get('halaqoh') ?? '').trim()
   const tahunMasukRaw = formData.get('tahun_masuk')
   const tahunMasuk = tahunMasukRaw ? Number(tahunMasukRaw) : null
+  const waliKelasId = String(formData.get('wali_kelas_id') ?? '').trim() || null
 
   if (!nama) return { error: 'Nama wajib diisi' }
 
@@ -79,6 +82,7 @@ export async function updateSantri(
       kelas: kelas || null,
       halaqoh: halaqoh || null,
       tahun_masuk: tahunMasuk,
+      wali_kelas_id: waliKelasId,
     })
     .eq('id', santriId)
     .eq('institusi_id', institusiId)

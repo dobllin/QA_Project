@@ -6,6 +6,8 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useRef, useState } from 'react'
+import Image from 'next/image'
 
 type CustomField = {
   key: string
@@ -61,13 +63,26 @@ type PoinLog = {
   tanggal: string
 }
 
+type KehadiranRow = {
+  id: string
+  tanggal: string
+  status: string
+  keterangan: string | null
+}
+
 type SantriData = {
   santri: Santri
+  waliKelas: { id: string; nama: string; ttd_url: string | null } | null
   kategoriList: Kategori[]
   totalSetoran: number
-  totalWithAbsen: number
-  totalHadir: number
-  totalTidakHadir: number
+  kehadiranList: KehadiranRow[]
+  kehadiranCount: {
+    hadir: number
+    izin: number
+    sakit: number
+    alpha: number
+  }
+  totalKehadiranTercatat: number
   poinLog: PoinLog[]
   poinAwal: number
   poinAkhir: number
@@ -77,12 +92,6 @@ type Institusi = {
   id: number
   nama: string
   jenis: string
-}
-
-const jenisLabel: Record<string, string> = {
-  RA: 'Raudhatul Athfal',
-  TPQ: 'Taman Pendidikan Quran',
-  PONPES: 'Pondok Pesantren',
 }
 
 const kualitasLabel: Record<string, string> = {
@@ -107,6 +116,13 @@ const poinJenisLabel: Record<string, string> = {
   kesalahan_parah: 'Kesalahan parah',
 }
 
+const statusKehadiranLabel: Record<string, string> = {
+  hadir: 'Hadir',
+  izin: 'Izin',
+  sakit: 'Sakit',
+  alpha: 'Alpha',
+}
+
 function formatTanggal(iso: string) {
   const d = new Date(iso)
   return d.toLocaleDateString('id-ID', {
@@ -116,19 +132,13 @@ function formatTanggal(iso: string) {
   })
 }
 
-function formatMinggu(minggu: string, start: string, end: string) {
-  const match = minggu.match(/^(\d{4})-W(\d{1,2})$/)
-  const weekNum = match ? parseInt(match[2]) : 0
-  const startD = new Date(start).toLocaleDateString('id-ID', {
-    day: 'numeric',
-    month: 'short',
-  })
-  const endD = new Date(end).toLocaleDateString('id-ID', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
-  return `Minggu ke-${weekNum} (${startD} – ${endD})`
+function formatBulan(bulanStr: string) {
+  const match = bulanStr.match(/^(\d{4})-(\d{1,2})$/)
+  if (!match) return bulanStr
+  const year = parseInt(match[1])
+  const month = parseInt(match[2])
+  const d = new Date(year, month - 1, 1)
+  return d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
 }
 
 export default function LaporanClient({
@@ -136,21 +146,21 @@ export default function LaporanClient({
   institusiId,
   santriList,
   currentSantriId,
-  currentMinggu,
-  weekStart,
-  weekEnd,
+  currentBulan,
   santriData,
 }: {
   institusi: Institusi
   institusiId: number
   santriList: Santri[]
   currentSantriId: string | null
-  currentMinggu: string
-  weekStart: string
-  weekEnd: string
+  currentBulan: string
+  periodStart: string
+  periodEnd: string
   santriData: SantriData | null
 }) {
   const router = useRouter()
+  const printRef = useRef<HTMLDivElement>(null)
+  const [isDownloading, setIsDownloading] = useState(false)
 
   const updateQuery = (santri: string, minggu: string) => {
     const params = new URLSearchParams()
@@ -159,21 +169,54 @@ export default function LaporanClient({
     router.push(`/institusi/${institusiId}/laporan?${params.toString()}`)
   }
 
+  const handleDownloadPDF = async () => {
+    if (!printRef.current || !santriData) return
+    setIsDownloading(true)
+    try {
+      // Dynamic import biar library cuma di-load di browser
+      const html2pdf = (await import('html2pdf.js')).default
+      const fileName = `Laporan-${santriData.santri.nama}-${currentBulan}.pdf`
+      await html2pdf()
+        .set({
+          margin: [10, 10, 10, 10],
+          filename: fileName,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+        })
+        .from(printRef.current)
+        .save()
+    } catch (err) {
+      console.error('Download PDF gagal:', err)
+      alert('Download PDF gagal. Coba refresh halaman.')
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
+  // Total kehadiran mingguan
+  const totalHariEfektif = santriData?.totalKehadiranTercatat ?? 0
+  const persenHadir =
+    santriData && totalHariEfektif > 0
+      ? Math.round((santriData.kehadiranCount.hadir / totalHariEfektif) * 100)
+      : 0
+
   return (
     <div>
-      {/* PICKER — hide waktu print */}
-      <div className="mb-8 print:hidden">
+      {/* PICKER */}
+      <div className="mb-8">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-copper-600 mb-2">
-              {jenisLabel[institusi.jenis] ?? 'Kelola'}
+              Laporan Bulanan
             </div>
             <h1 className="font-display text-5xl text-forest-800 leading-none">
               Laporan
             </h1>
             <p className="mt-4 text-sm text-ink-500 max-w-md leading-relaxed">
               Cetak rapor mingguan santri buat wali murid. Pilih santri dan
-              minggu dulu.
+              bulan, lalu download PDF.
             </p>
           </div>
           <Link
@@ -193,7 +236,7 @@ export default function LaporanClient({
             </label>
             <select
               value={currentSantriId ?? ''}
-              onChange={(e) => updateQuery(e.target.value, currentMinggu)}
+              onChange={(e) => updateQuery(e.target.value, currentBulan)}
               className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
             >
               <option value="">— Pilih santri —</option>
@@ -207,11 +250,11 @@ export default function LaporanClient({
           </div>
           <div>
             <label className="block text-xs font-medium text-ink-700 mb-1.5">
-              Minggu
+              Bulan
             </label>
             <input
-              type="week"
-              value={currentMinggu}
+              type="month"
+              value={currentBulan}
               onChange={(e) =>
                 updateQuery(currentSantriId ?? '', e.target.value)
               }
@@ -219,174 +262,295 @@ export default function LaporanClient({
             />
           </div>
           <button
-            onClick={() => window.print()}
-            disabled={!santriData}
+            onClick={handleDownloadPDF}
+            disabled={!santriData || isDownloading}
             className="bg-forest-700 hover:bg-forest-800 disabled:opacity-40 text-cream-50 text-sm font-medium px-5 py-2 rounded-lg transition h-fit"
           >
-            🖨 Cetak
+            {isDownloading ? 'Memproses...' : '⬇ Download PDF'}
           </button>
         </div>
       </div>
 
       {/* REPORT */}
       {!santriData ? (
-        <div className="bg-cream-50 border border-line rounded-xl p-8 text-center print:hidden">
+        <div className="bg-cream-50 border border-line rounded-xl p-8 text-center">
           <p className="text-sm text-ink-500">
             Pilih santri di atas buat lihat laporan.
           </p>
         </div>
       ) : (
-        <div className="print-page">
-          {/* Header cetak */}
-          <div className="text-center mb-8 pb-6 border-b-2 border-forest-800">
-            <div className="text-[10px] font-medium uppercase tracking-[0.25em] text-copper-600 mb-2">
-              {jenisLabel[institusi.jenis] ?? ''}
+        <div
+          ref={printRef}
+          className="bg-white text-black p-8"
+          style={{ fontFamily: 'serif' }}
+        >
+          {/* KOP SURAT */}
+          <div
+            className="pb-4 mb-6"
+            style={{ borderBottom: '3px double #000' }}
+          >
+            <div className="flex items-center gap-4">
+              <div className="shrink-0">
+                <Image
+                  src="/logo-qa.jpg"
+                  alt="Logo Qurrota A'yun"
+                  width={90}
+                  height={90}
+                  className="object-contain"
+                  unoptimized
+                />
+              </div>
+              <div className="flex-1 text-center">
+                <div
+                  className="text-lg mb-1"
+                  style={{ fontFamily: 'serif', direction: 'rtl' }}
+                >
+                  معهد تحفيظ القران قرة أعين
+                </div>
+                <div className="font-bold text-2xl leading-tight mb-1">
+                  MA&apos;HAD TAHFIDZ QUR&apos;AN QURROTA A&apos;YUN
+                </div>
+                <div className="text-sm font-semibold mb-1">
+                  ( TERAKREDITASI A )
+                </div>
+                <div className="text-xs mb-1">
+                  NSPP : 510331750047 &nbsp; NPSN : 70023433
+                </div>
+                <div className="text-xs leading-tight">
+                  Jl. Batu Jambrut No. 15 Rt.014 Rw.02 Batu Ampar Kramat Jati
+                  Jakarta Timur 13520
+                  <br />
+                  Telp. (021) 800 3893 · E-mail : qaisindonesia@gmail.com
+                </div>
+              </div>
             </div>
-            <div className="font-display text-3xl text-forest-800">
-              {institusi.nama}
+          </div>
+
+          {/* Judul Laporan */}
+          <div className="text-center mb-6">
+            <div className="font-bold text-xl underline">
+              LAPORAN BULANAN SANTRI
             </div>
-            <div className="text-lg mt-2 text-ink-700">
-              Laporan {formatMinggu(currentMinggu, weekStart, weekEnd)}
+            <div style={{ fontSize: '13px', marginTop: '2px' }}>
+              Bulan {formatBulan(currentBulan)}
             </div>
           </div>
 
           {/* Info santri */}
           <div className="mb-6">
-            <div className="text-[10px] font-medium uppercase tracking-widest text-copper-600 mb-2">
+            <div className="font-bold text-sm mb-2 uppercase tracking-wide">
               Data Santri
             </div>
-            <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm">
-              <div>
-                <span className="text-ink-500">Nama: </span>
-                <span className="font-medium text-forest-800">
-                  {santriData.santri.nama}
-                </span>
-              </div>
-              {santriData.santri.kelas && (
-                <div>
-                  <span className="text-ink-500">Kelas: </span>
-                  <span className="text-ink-700">
-                    {santriData.santri.kelas}
-                  </span>
-                </div>
-              )}
-              {santriData.santri.halaqoh && (
-                <div>
-                  <span className="text-ink-500">Halaqoh: </span>
-                  <span className="text-ink-700">
-                    {santriData.santri.halaqoh}
-                  </span>
-                </div>
-              )}
-              {santriData.santri.tahun_masuk && (
-                <div>
-                  <span className="text-ink-500">Tahun masuk: </span>
-                  <span className="text-ink-700">
-                    {santriData.santri.tahun_masuk}
-                  </span>
-                </div>
-              )}
-            </div>
+            <table className="w-full text-sm">
+              <tbody>
+                <tr>
+                  <td className="w-32 py-0.5">Nama</td>
+                  <td className="w-4 py-0.5">:</td>
+                  <td className="font-semibold py-0.5">
+                    {santriData.santri.nama}
+                  </td>
+                </tr>
+                {santriData.santri.kelas && (
+                  <tr>
+                    <td className="py-0.5">Kelas</td>
+                    <td className="py-0.5">:</td>
+                    <td className="py-0.5">{santriData.santri.kelas}</td>
+                  </tr>
+                )}
+                {santriData.santri.halaqoh && (
+                  <tr>
+                    <td className="py-0.5">Halaqoh</td>
+                    <td className="py-0.5">:</td>
+                    <td className="py-0.5">{santriData.santri.halaqoh}</td>
+                  </tr>
+                )}
+                {santriData.santri.tahun_masuk && (
+                  <tr>
+                    <td className="py-0.5">Tahun masuk</td>
+                    <td className="py-0.5">:</td>
+                    <td className="py-0.5">{santriData.santri.tahun_masuk}</td>
+                  </tr>
+                )}
+                {santriData.waliKelas && (
+                  <tr>
+                    <td className="py-0.5">Wali Kelas</td>
+                    <td className="py-0.5">:</td>
+                    <td className="py-0.5 font-semibold">
+                      {santriData.waliKelas.nama}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
 
           {/* Ringkasan minggu */}
-          <div className="mb-8 grid grid-cols-3 gap-3">
-            <div className="border border-line rounded-lg p-4 text-center">
-              <div className="text-[10px] text-ink-500 uppercase tracking-wider mb-1">
-                Total setoran
+          <div
+            className="mb-6 grid grid-cols-3 gap-3"
+            style={{ pageBreakInside: 'avoid' }}
+          >
+            <div
+              className="p-3 text-center"
+              style={{ border: '1px solid #000' }}
+            >
+              <div className="text-[10px] uppercase tracking-wider mb-1">
+                Total Setoran
               </div>
-              <div className="font-display text-2xl text-forest-800">
-                {santriData.totalSetoran}
-              </div>
+              <div className="font-bold text-2xl">{santriData.totalSetoran}</div>
             </div>
-            <div className="border border-line rounded-lg p-4 text-center">
-              <div className="text-[10px] text-ink-500 uppercase tracking-wider mb-1">
+            <div
+              className="p-3 text-center"
+              style={{ border: '1px solid #000' }}
+            >
+              <div className="text-[10px] uppercase tracking-wider mb-1">
                 Kehadiran
               </div>
-              <div className="font-display text-2xl text-forest-800">
-                {santriData.totalWithAbsen > 0
-                  ? Math.round(
-                      (santriData.totalHadir / santriData.totalWithAbsen) * 100
-                    )
-                  : 0}
-                %
-              </div>
-              <div className="text-[10px] text-ink-400 mt-0.5">
-                {santriData.totalHadir}/{santriData.totalWithAbsen} hadir
+              <div className="font-bold text-2xl">{persenHadir}%</div>
+              <div className="text-[10px] mt-0.5">
+                {santriData.kehadiranCount.hadir}/{totalHariEfektif} hadir
               </div>
             </div>
-            <div className="border border-line rounded-lg p-4 text-center">
-              <div className="text-[10px] text-ink-500 uppercase tracking-wider mb-1">
-                Poin akhir
+            <div
+              className="p-3 text-center"
+              style={{ border: '1px solid #000' }}
+            >
+              <div className="text-[10px] uppercase tracking-wider mb-1">
+                Poin Akhir
               </div>
-              <div className="font-display text-2xl text-forest-800">
-                {santriData.poinAkhir}
-              </div>
-              <div className="text-[10px] text-ink-400 mt-0.5">
-                Awal minggu: {santriData.poinAwal}
+              <div className="font-bold text-2xl">{santriData.poinAkhir}</div>
+              <div className="text-[10px] mt-0.5">
+                Awal: {santriData.poinAwal}
               </div>
             </div>
           </div>
 
+          {/* Kehadiran detail */}
+          {santriData.kehadiranList.length > 0 && (
+            <div className="mb-6" style={{ pageBreakInside: 'avoid' }}>
+              <div
+                className="font-bold text-sm mb-2 uppercase tracking-wide pb-1"
+                style={{ borderBottom: '2px solid #000' }}
+              >
+                Bagian 1 · Kehadiran
+              </div>
+              <div className="flex flex-wrap gap-4 text-xs mb-2">
+                <span>
+                  <b>Hadir:</b> {santriData.kehadiranCount.hadir}
+                </span>
+                <span>
+                  <b>Izin:</b> {santriData.kehadiranCount.izin}
+                </span>
+                <span>
+                  <b>Sakit:</b> {santriData.kehadiranCount.sakit}
+                </span>
+                <span>
+                  <b>Alpha:</b> {santriData.kehadiranCount.alpha}
+                </span>
+              </div>
+              <table
+                className="w-full text-xs"
+                style={{ borderCollapse: 'collapse' }}
+              >
+                <thead>
+                  <tr>
+                    <th
+                      className="text-left py-1 px-2 w-24"
+                      style={{
+                        border: '1px solid #000',
+                        backgroundColor: '#f0f0f0',
+                      }}
+                    >
+                      Tanggal
+                    </th>
+                    <th
+                      className="text-left py-1 px-2 w-24"
+                      style={{
+                        border: '1px solid #000',
+                        backgroundColor: '#f0f0f0',
+                      }}
+                    >
+                      Status
+                    </th>
+                    <th
+                      className="text-left py-1 px-2"
+                      style={{
+                        border: '1px solid #000',
+                        backgroundColor: '#f0f0f0',
+                      }}
+                    >
+                      Keterangan
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {santriData.kehadiranList.map((k) => (
+                    <tr key={k.id}>
+                      <td
+                        className="py-1 px-2"
+                        style={{ border: '1px solid #000' }}
+                      >
+                        {formatTanggal(k.tanggal)}
+                      </td>
+                      <td
+                        className="py-1 px-2 font-semibold"
+                        style={{ border: '1px solid #000' }}
+                      >
+                        {statusKehadiranLabel[k.status] ?? k.status}
+                      </td>
+                      <td
+                        className="py-1 px-2 italic"
+                        style={{ border: '1px solid #000' }}
+                      >
+                        {k.keterangan ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {/* Rekap Poin */}
           {santriData.poinLog.length > 0 && (
-            <div className="mb-10">
-              <div className="mb-4">
-                <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-copper-600 mb-1">
-                  Bagian 1
-                </div>
-                <h2 className="font-display text-2xl text-forest-800 pb-2 border-b-2 border-forest-800">
-                  Poin Disiplin
-                </h2>
+            <div className="mb-6" style={{ pageBreakInside: 'avoid' }}>
+              <div
+                className="font-bold text-sm mb-2 uppercase tracking-wide pb-1"
+                style={{ borderBottom: '2px solid #000' }}
+              >
+                Bagian 2 · Poin Disiplin
               </div>
-              <div className="space-y-1">
-                {santriData.poinLog.map((log) => (
-                  <div
-                    key={log.id}
-                    className="flex items-baseline gap-3 text-sm py-1"
-                  >
-                    <div className="w-24 text-ink-500 text-xs shrink-0">
-                      {formatTanggal(log.tanggal)}
-                    </div>
-                    <div
-                      className={`w-12 font-medium text-right shrink-0 ${
-                        log.nilai_perubahan > 0
-                          ? 'text-success-500'
-                          : 'text-error-500'
-                      }`}
-                    >
-                      {log.nilai_perubahan > 0 ? '+' : ''}
-                      {log.nilai_perubahan}
-                    </div>
-                    <div className="text-ink-700 w-32 shrink-0 text-xs">
-                      {poinJenisLabel[log.jenis] ?? log.jenis}
-                    </div>
-                    <div className="text-ink-500 italic text-xs flex-1">
-                      {log.keterangan ?? '—'}
-                    </div>
+              {santriData.poinLog.map((log) => (
+                <div
+                  key={log.id}
+                  className="flex items-baseline gap-3 text-xs py-0.5"
+                >
+                  <div className="w-24 shrink-0">
+                    {formatTanggal(log.tanggal)}
                   </div>
-                ))}
-              </div>
+                  <div className="w-12 font-bold text-right shrink-0">
+                    {log.nilai_perubahan > 0 ? '+' : ''}
+                    {log.nilai_perubahan}
+                  </div>
+                  <div className="w-32 shrink-0">
+                    {poinJenisLabel[log.jenis] ?? log.jenis}
+                  </div>
+                  <div className="italic flex-1">{log.keterangan ?? '—'}</div>
+                </div>
+              ))}
             </div>
           )}
 
           {/* Rekap Setoran per kategori */}
-          {santriData.kategoriList.length === 0 ? (
-            <div className="text-center text-sm text-ink-500 italic py-8">
-              Belum ada setoran tercatat di minggu ini.
-            </div>
-          ) : (
+          {santriData.kategoriList.length > 0 && (
             <div>
-              <div className="mb-4">
-                <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-copper-600 mb-1">
-                  Bagian 2
-                </div>
-                <h2 className="font-display text-2xl text-forest-800 pb-2 border-b-2 border-forest-800">
-                  Setoran & Progres Pembelajaran
-                </h2>
+              <div
+                className="font-bold text-sm mb-2 uppercase tracking-wide pb-1"
+                style={{ borderBottom: '2px solid #000' }}
+              >
+                Bagian 3 · Setoran &amp; Progres Pembelajaran
               </div>
 
-              {santriData.kategoriList.map((k, idx) => {
+              {santriData.kategoriList.map((k) => {
                 const lancar = k.progres.filter(
                   (p) => p.lancar === true
                 ).length
@@ -404,85 +568,116 @@ export default function LaporanClient({
                 return (
                   <div
                     key={k.id}
-                    className={`mb-8 break-inside-avoid ${
-                      idx > 0 ? 'pt-4' : ''
-                    }`}
+                    className="mb-5"
+                    style={{ pageBreakInside: 'avoid' }}
                   >
-                    <div className="bg-forest-800 text-cream-50 px-4 py-3 rounded-t-lg">
-                      <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-copper-500 mb-1">
-                        Kategori Pembelajaran
-                      </div>
-                      <div className="flex items-baseline justify-between gap-4 flex-wrap">
-                        <div className="font-display text-2xl uppercase tracking-wide">
-                          {k.nama}
-                        </div>
-                        <div className="text-xs text-cream-100 font-medium">
-                          {k.progres.length} setoran
-                        </div>
-                      </div>
+                    <div
+                      className="font-bold text-sm px-3 py-2"
+                      style={{
+                        backgroundColor: '#e8e8e8',
+                        border: '1px solid #000',
+                      }}
+                    >
+                      KATEGORI: {k.nama.toUpperCase()} ({k.progres.length}{' '}
+                      setoran)
                     </div>
 
-                    <div className="border border-forest-800 border-t-0 px-4 py-3 bg-cream-50">
-                      <div className="text-xs text-ink-700 flex flex-wrap gap-x-6 gap-y-1">
-                        {totalLancar > 0 && (
-                          <span>
-                            <span className="text-ink-500">Kelancaran: </span>
-                            <span className="font-medium text-forest-800">
-                              {lancar}/{totalLancar} lancar (
-                              {Math.round((lancar / totalLancar) * 100)}%)
-                            </span>
-                          </span>
-                        )}
-                        {Object.entries(nilaiCounts).length > 0 && (
-                          <span>
-                            <span className="text-ink-500">Rekap nilai: </span>
-                            <span className="text-forest-800">
-                              {Object.entries(nilaiCounts)
-                                .map(
-                                  ([kualitas, count]) =>
-                                    `${count}× ${
-                                      kualitasLabel[kualitas] ?? kualitas
-                                    }`
-                                )
-                                .join(', ')}
-                            </span>
-                          </span>
-                        )}
-                      </div>
+                    <div
+                      className="text-xs px-3 py-1"
+                      style={{
+                        borderLeft: '1px solid #000',
+                        borderRight: '1px solid #000',
+                      }}
+                    >
+                      {totalLancar > 0 && (
+                        <span className="mr-4">
+                          Kelancaran: {lancar}/{totalLancar} lancar (
+                          {Math.round((lancar / totalLancar) * 100)}%)
+                        </span>
+                      )}
+                      {Object.entries(nilaiCounts).length > 0 && (
+                        <span>
+                          Nilai:{' '}
+                          {Object.entries(nilaiCounts)
+                            .map(
+                              ([kualitas, count]) =>
+                                `${count}× ${
+                                  kualitasLabel[kualitas] ?? kualitas
+                                }`
+                            )
+                            .join(', ')}
+                        </span>
+                      )}
                     </div>
 
-                    <table className="w-full text-xs border-collapse border border-forest-800 border-t-0 rounded-b-lg">
+                    <table
+                      className="w-full text-xs"
+                      style={{ borderCollapse: 'collapse' }}
+                    >
                       <thead>
-                        <tr className="bg-cream-100 border-b border-line text-ink-700 uppercase tracking-wider text-[9px]">
-                          <th className="text-left py-2 px-3 w-20">Tanggal</th>
-                          <th className="text-left py-2 px-3">Materi</th>
-                          <th className="text-left py-2 px-3 w-24">Nilai</th>
+                        <tr>
+                          <th
+                            className="text-left py-1 px-2 w-20"
+                            style={{
+                              border: '1px solid #000',
+                              backgroundColor: '#f0f0f0',
+                            }}
+                          >
+                            Tanggal
+                          </th>
+                          <th
+                            className="text-left py-1 px-2"
+                            style={{
+                              border: '1px solid #000',
+                              backgroundColor: '#f0f0f0',
+                            }}
+                          >
+                            Materi
+                          </th>
+                          <th
+                            className="text-left py-1 px-2 w-24"
+                            style={{
+                              border: '1px solid #000',
+                              backgroundColor: '#f0f0f0',
+                            }}
+                          >
+                            Nilai
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
                         {k.progres.map((p) => (
-                          <tr key={p.id} className="border-b border-line/40">
-                            <td className="py-2 px-3 text-ink-600 align-top">
+                          <tr key={p.id}>
+                            <td
+                              className="py-1 px-2 align-top"
+                              style={{ border: '1px solid #000' }}
+                            >
                               {new Date(p.tanggal).toLocaleDateString('id-ID', {
                                 day: 'numeric',
                                 month: 'short',
                               })}
                             </td>
-                            <td className="py-2 px-3 align-top">
+                            <td
+                              className="py-1 px-2 align-top"
+                              style={{ border: '1px solid #000' }}
+                            >
                               {renderMateri(p)}
                               {renderCustom(p, k.customFields)}
                               {p.catatan && (
-                                <div className="text-ink-500 italic mt-0.5">
+                                <div className="italic mt-0.5 text-[10px]">
                                   {p.catatan}
                                 </div>
                               )}
                             </td>
-                            <td className="py-2 px-3 align-top text-ink-700">
+                            <td
+                              className="py-1 px-2 align-top"
+                              style={{ border: '1px solid #000' }}
+                            >
                               {p.kualitas
                                 ? kualitasLabel[p.kualitas] ?? p.kualitas
                                 : '—'}
                               {p.lancar !== null && (
-                                <div className="text-[10px] text-ink-500">
+                                <div className="text-[10px]">
                                   {p.lancar ? 'Lancar' : 'Tidak lancar'}
                                 </div>
                               )}
@@ -496,33 +691,66 @@ export default function LaporanClient({
               })}
             </div>
           )}
+
+          {/* Footer + TTD Wali Kelas */}
+          <div
+            style={{
+              marginTop: '40px',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              pageBreakInside: 'avoid',
+            }}
+          >
+            <div style={{ textAlign: 'center', fontSize: '11px' }}>
+              <div style={{ marginBottom: '4px' }}>
+                Jakarta, {formatTanggal(new Date().toISOString())}
+              </div>
+              {santriData.waliKelas ? (
+                <>
+                  <div style={{ marginBottom: '4px' }}>Wali Kelas Pembimbing,</div>
+                  {santriData.waliKelas.ttd_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={santriData.waliKelas.ttd_url}
+                      alt="TTD"
+                      crossOrigin="anonymous"
+                      style={{
+                        width: '110px',
+                        height: '70px',
+                        objectFit: 'contain',
+                        margin: '4px auto',
+                        display: 'block',
+                      }}
+                    />
+                  ) : (
+                    <div style={{ height: '70px' }} />
+                  )}
+                  <div
+                    style={{
+                      fontWeight: 'bold',
+                      textDecoration: 'underline',
+                      marginTop: '2px',
+                    }}
+                  >
+                    ( {santriData.waliKelas.nama} )
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ marginBottom: '4px' }}>Wali Kelas Pembimbing,</div>
+                  <div style={{ height: '70px' }} />
+                  <div style={{ fontWeight: 'bold' }}>( ................... )</div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       )}
-
-      <style jsx global>{`
-        @media print {
-          @page {
-            size: A4 portrait;
-            margin: 15mm;
-          }
-          body {
-            background: white !important;
-          }
-          .print-page {
-            box-shadow: none !important;
-          }
-          nav,
-          aside,
-          .sidebar {
-            display: none !important;
-          }
-        }
-      `}</style>
     </div>
   )
 }
 
-function renderMateri(p: ProgresRow): React.ReactNode {
+function renderMateri(p: ProgresRow) {
   const parts: string[] = []
   if (p.jenis_setoran) {
     parts.push(jenisSetoranLabel[p.jenis_setoran] ?? p.jenis_setoran)
@@ -540,13 +768,10 @@ function renderMateri(p: ProgresRow): React.ReactNode {
   if (p.iqro_jilid) parts.push(`Jilid ${p.iqro_jilid}`)
   if (p.iqro_halaman) parts.push(`Hal ${p.iqro_halaman}`)
 
-  return <div className="text-ink-700">{parts.join(' · ') || '—'}</div>
+  return <div>{parts.join(' · ') || '—'}</div>
 }
 
-function renderCustom(
-  p: ProgresRow,
-  customFields: CustomField[]
-): React.ReactNode {
+function renderCustom(p: ProgresRow, customFields: CustomField[]) {
   const entries = customFields
     .map((f) => ({
       label: f.label,
@@ -557,7 +782,7 @@ function renderCustom(
   if (entries.length === 0) return null
 
   return (
-    <div className="text-[10px] text-ink-500 mt-0.5">
+    <div className="text-[10px] mt-0.5">
       {entries.map((e, i) => (
         <span key={i}>
           {i > 0 ? ' · ' : ''}

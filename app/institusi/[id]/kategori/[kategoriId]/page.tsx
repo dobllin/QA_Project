@@ -61,7 +61,7 @@ export default async function KategoriSetoranPage({
   // santri kena notFound()/404. Di sini ambil terpisah + error-nya dilog.
   const { data: kategori, error: katError } = await supabase
     .from('kategori')
-    .select('id, nama, institusi_id')
+    .select('id, nama, target, institusi_id')
     .eq('id', kategoriId)
     .eq('institusi_id', institusiId)
     .maybeSingle()
@@ -154,6 +154,15 @@ export default async function KategoriSetoranPage({
           untuk isi absen dan setoran hari ini.
         </p>
       </div>
+
+      {kategori.target && (
+        <div className="mb-6 rounded-xl border border-forest-700/25 bg-cream-100 p-4">
+          <div className="text-[10px] uppercase tracking-widest text-ink-500 mb-1">
+            Target dari admin
+          </div>
+          <p className="text-sm text-ink-900">{kategori.target}</p>
+        </div>
+      )}
 
       <div className="divider-double mb-8" />
 

@@ -9,6 +9,7 @@ const peranLabel: Record<string, string> = {
   admin: 'Admin institusi',
 }
 
+
 const jenisLabel: Record<string, string> = {
   RA: 'Raudhatul Athfal',
   TPQ: 'Taman Pendidikan Quran',
@@ -104,11 +105,12 @@ export default async function InstitusiLayout({
           <NavItem href={`/institusi/${institusi.id}/kategori`}>
             {isAdmin ? 'Kategori' : 'Kategori saya'}
           </NavItem>
-          {isAdmin && (
-            <NavItem href={`/institusi/${institusi.id}/laporan`}>
-              Laporan
-            </NavItem>
-          )}
+         {isAdmin && (
+  <>
+    <NavItem href={`/institusi/${institusi.id}/kehadiran`}>Kehadiran</NavItem>
+    <NavItem href={`/institusi/${institusi.id}/laporan`}>Laporan</NavItem>
+  </>
+)}
           {isPondok && (
             <NavItem href={`/institusi/${institusi.id}/recap`}>Recap poin</NavItem>
           )}

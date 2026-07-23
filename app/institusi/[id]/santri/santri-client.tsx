@@ -12,8 +12,15 @@ type Santri = {
   tahun_masuk: number | null
   poin: number | null
   institusi_id: number
+  wali_kelas_id: string | null
   kategoriCount: number
   ustadzCount: number
+}
+
+type Ustadz = {
+  id: string
+  nama: string
+  peran: 'ustadz' | 'ustadzah'
 }
 
 type Stats = {
@@ -42,26 +49,17 @@ export default function SantriClient({
   institusi,
   institusiId,
   isAdmin,
+  ustadzList,
 }: {
   santri: Santri[]
   stats: Stats
   institusi: Institusi
   institusiId: number
   isAdmin: boolean
+  ustadzList: Ustadz[]
 }) {
   const [showForm, setShowForm] = useState(false)
   const isPondok = institusi.jenis === 'PONPES'
-
-  // Kartu: Santri, Kategori, [Pengajar - admin], Progres, [Rata-rata poin - pondok].
-  // Kelas Tailwind harus string utuh, jangan di-interpolasi (`lg:grid-cols-${n}`
-  // gak kedetect purge-nya).
-  const cardCount = 3 + (isAdmin ? 1 : 0) + (isPondok ? 1 : 0)
-  const gridCols =
-    cardCount === 5
-      ? 'lg:grid-cols-5'
-      : cardCount === 4
-      ? 'lg:grid-cols-4'
-      : 'lg:grid-cols-3'
 
   const avgPoinClass =
     stats.avgPoin >= 100
@@ -98,10 +96,14 @@ export default function SantriClient({
 
       <div className="divider-double mb-8" />
 
-      <div className={`grid grid-cols-2 ${gridCols} gap-3 mb-8`}>
+      <div
+        className={`grid grid-cols-2 ${
+          isPondok ? 'lg:grid-cols-5' : 'lg:grid-cols-4'
+        } gap-3 mb-8`}
+      >
         <div className="bg-cream-50 border border-line rounded-xl p-4">
           <div className="text-[10px] text-ink-500 mb-1 uppercase tracking-wider">
-            {isAdmin ? 'Santri' : 'Santri ampuan'}
+            Santri
           </div>
           <div className="font-display text-2xl text-forest-800">
             {stats.santriCount}
@@ -109,25 +111,23 @@ export default function SantriClient({
         </div>
         <div className="bg-cream-50 border border-line rounded-xl p-4">
           <div className="text-[10px] text-ink-500 mb-1 uppercase tracking-wider">
-            {isAdmin ? 'Kategori' : 'Kategori saya'}
+            Kategori
           </div>
           <div className="font-display text-2xl text-forest-800">
             {stats.kategoriCount}
           </div>
         </div>
-        {isAdmin && (
-          <div className="bg-cream-50 border border-line rounded-xl p-4">
-            <div className="text-[10px] text-ink-500 mb-1 uppercase tracking-wider">
-              Pengajar
-            </div>
-            <div className="font-display text-2xl text-forest-800">
-              {stats.pengajarCount}
-            </div>
-          </div>
-        )}
         <div className="bg-cream-50 border border-line rounded-xl p-4">
           <div className="text-[10px] text-ink-500 mb-1 uppercase tracking-wider">
-            {isAdmin ? 'Progres bulan ini' : 'Setoran saya bulan ini'}
+            Pengajar
+          </div>
+          <div className="font-display text-2xl text-forest-800">
+            {stats.pengajarCount}
+          </div>
+        </div>
+        <div className="bg-cream-50 border border-line rounded-xl p-4">
+          <div className="text-[10px] text-ink-500 mb-1 uppercase tracking-wider">
+            Progres bulan ini
           </div>
           <div className="font-display text-2xl text-forest-800">
             {stats.progresBulanIni}
@@ -148,6 +148,7 @@ export default function SantriClient({
       {showForm && (
         <SantriForm
           institusiId={institusiId}
+          ustadzList={ustadzList}
           onDone={() => setShowForm(false)}
         />
       )}
@@ -162,7 +163,7 @@ export default function SantriClient({
             <p className="text-sm text-ink-500">
               {isAdmin
                 ? 'Belum ada santri. Klik "Tambah santri" untuk memulai.'
-                : 'Belum ada santri yang ditugaskan ke kamu di institusi ini. Hubungi admin institusi.'}
+                : 'Belum ada santri terdaftar di institusi ini.'}
             </p>
           </div>
         ) : (
@@ -192,9 +193,7 @@ export default function SantriClient({
                       {s.tahun_masuk && <span>Masuk {s.tahun_masuk}</span>}
                       {s.kategoriCount > 0 && (
                         <span>
-                          {isAdmin
-                            ? `${s.kategoriCount} kategori · ${s.ustadzCount} pengajar`
-                            : `${s.kategoriCount} kategori saya ampu`}
+                          {s.kategoriCount} kategori · {s.ustadzCount} pengajar
                         </span>
                       )}
                     </div>
@@ -218,9 +217,11 @@ export default function SantriClient({
 
 function SantriForm({
   institusiId,
+  ustadzList,
   onDone,
 }: {
   institusiId: number
+  ustadzList: Ustadz[]
   onDone: () => void
 }) {
   const [isPending, startTransition] = useTransition()
@@ -289,6 +290,28 @@ function SantriForm({
             className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
             placeholder="2024"
           />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-medium text-ink-700 mb-1.5">
+            Wali Kelas (untuk TTD di laporan)
+          </label>
+          <select
+            name="wali_kelas_id"
+            defaultValue=""
+            className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+          >
+            <option value="">— Pilih ustadz/ustadzah —</option>
+            {ustadzList.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.nama} ({u.peran})
+              </option>
+            ))}
+          </select>
+          {ustadzList.length === 0 && (
+            <div className="text-[10px] text-ink-500 italic mt-1">
+              Belum ada ustadz/ustadzah di institusi ini.
+            </div>
+          )}
         </div>
 
         {error && (

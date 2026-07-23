@@ -4,6 +4,15 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 
+
+
+export type CustomField = {
+  key: string
+  label: string
+  type: 'text' | 'number' | 'select'
+  options?: string[]
+}
+
 async function assertInstitusiAdmin(institusiId: number) {
   const supabase = await createClient()
   const {
@@ -193,6 +202,63 @@ export async function unassignFromKategori(
     .from('ustadz_santri')
     .delete()
     .eq('id', assignmentId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/institusi/${institusiId}/kategori`)
+  return { success: true }
+}
+// ============================================================
+// Update custom fields per kategori
+// ============================================================
+
+export async function updateKategoriFields(
+  institusiId: number,
+  kategoriId: number,
+  fields: CustomField[]
+) {
+  await assertInstitusiAdmin(institusiId)
+
+  if (!Array.isArray(fields)) return { error: 'Format tidak valid' }
+
+  const seenKeys = new Set<string>()
+  for (const f of fields) {
+    if (!f.key || !f.label || !f.type) {
+      return { error: 'Setiap field harus punya key, label, dan type' }
+    }
+    if (f.label.length > 60) {
+      return { error: `Label "${f.label}" terlalu panjang (max 60 karakter)` }
+    }
+    if (seenKeys.has(f.key)) {
+      return { error: 'Ada field dengan key duplikat' }
+    }
+    seenKeys.add(f.key)
+    if (!['text', 'number', 'select'].includes(f.type)) {
+      return { error: `Type "${f.type}" tidak dikenal` }
+    }
+    if (f.type === 'select') {
+      if (!Array.isArray(f.options) || f.options.length === 0) {
+        return { error: `Field "${f.label}" tipe select harus punya minimal 1 pilihan` }
+      }
+    }
+  }
+
+  const admin = createAdminClient()
+
+  const { data: kat } = await admin
+    .from('kategori')
+    .select('id, institusi_id')
+    .eq('id', kategoriId)
+    .single()
+
+  if (!kat || kat.institusi_id !== institusiId) {
+    return { error: 'Kategori tidak ditemukan' }
+  }
+
+  const { error } = await admin
+    .from('kategori')
+    .update({ custom_fields: fields })
+    .eq('id', kategoriId)
 
   if (error) return { error: error.message }
 

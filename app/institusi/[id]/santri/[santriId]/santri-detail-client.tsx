@@ -19,10 +19,18 @@ type Santri = {
   poin: number | null
 }
 
+type CustomField = {
+  key: string
+  label: string
+  type: 'text' | 'number' | 'select'
+  options?: string[]
+}
+
 type Kategori = {
   id: number
   nama: string
   ustadzNames: string[]
+  customFields: CustomField[]
 }
 
 type Progres = {
@@ -47,6 +55,7 @@ type Progres = {
   iqro_halaman: number | null
   kualitas: string | null
   catatan: string | null
+  custom_values: Record<string, string | number | null> | null
   profiles: { nama: string } | null
 }
 
@@ -140,7 +149,6 @@ export default function SantriDetailClient({
   institusiId,
   isAdmin,
   isPondok,
-  initialKategoriId = null,
 }: {
   santri: Santri
   kategoriList: Kategori[]
@@ -149,19 +157,10 @@ export default function SantriDetailClient({
   institusiId: number
   isAdmin: boolean
   isPondok: boolean
-  initialKategoriId?: number | null
 }) {
-  const [activeKategoriId, setActiveKategoriId] = useState<number>(() => {
-    // Dibuka dari checklist harian (?kategori=) → langsung ke tab itu.
-    // Divalidasi dulu ke kategoriList biar param ngaco gak bikin tab kosong.
-    if (
-      initialKategoriId &&
-      kategoriList.some((k) => k.id === initialKategoriId)
-    ) {
-      return initialKategoriId
-    }
-    return kategoriList[0]?.id ?? 0
-  })
+  const [activeKategoriId, setActiveKategoriId] = useState<number>(
+    kategoriList[0]?.id ?? 0
+  )
   const [showForm, setShowForm] = useState(true)
 
   const activeKategori = kategoriList.find((k) => k.id === activeKategoriId)
@@ -271,6 +270,7 @@ export default function SantriDetailClient({
                     santriId={santri.id}
                     kategoriId={activeKategori.id}
                     kategoriNama={activeKategori.nama}
+                    customFields={activeKategori.customFields ?? []}
                     institusiId={institusiId}
                     isAdmin={isAdmin}
                   />
@@ -296,6 +296,7 @@ export default function SantriDetailClient({
                         progresType={
                           isAdmin ? 'tahfiz' : getProgresType(activeKategori.nama)
                         }
+                        customFields={activeKategori.customFields ?? []}
                         institusiId={institusiId}
                         isAdmin={isAdmin}
                       />
@@ -516,12 +517,14 @@ function ProgresForm({
   santriId,
   kategoriId,
   kategoriNama,
+  customFields,
   institusiId,
   isAdmin,
 }: {
   santriId: string
   kategoriId: number
   kategoriNama: string
+  customFields: CustomField[]
   institusiId: number
   isAdmin: boolean
 }) {
@@ -825,6 +828,20 @@ function ProgresForm({
         </div>
       </div>
 
+      {/* CUSTOM FIELDS dari admin */}
+      {customFields.length > 0 && (
+        <div className="pt-4 border-t border-line/60 space-y-4">
+          <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-copper-600">
+            Field khusus (diatur admin)
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            {customFields.map((f) => (
+              <CustomFieldInput key={f.key} field={f} />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div>
         <label className="block text-xs font-medium text-ink-700 mb-1.5">
           Catatan / Keterangan (opsional)
@@ -865,11 +882,13 @@ function ProgresForm({
 function ProgresCard({
   progres,
   progresType,
+  customFields,
   institusiId,
   isAdmin,
 }: {
   progres: Progres
   progresType: ProgresType
+  customFields: CustomField[]
   institusiId: number
   isAdmin: boolean
 }) {
@@ -882,6 +901,7 @@ function ProgresCard({
       <ProgresEditForm
         progres={progres}
         progresType={progresType}
+        customFields={customFields}
         institusiId={institusiId}
         onCancel={() => {
           setIsEditing(false)
@@ -995,6 +1015,20 @@ function ProgresCard({
               {progres.kendala}
             </div>
           )}
+          {customFields.length > 0 && progres.custom_values && (
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5">
+              {customFields.map((f) => {
+                const val = progres.custom_values?.[f.key]
+                if (val === null || val === undefined || val === '') return null
+                return (
+                  <div key={f.key} className="text-xs">
+                    <span className="text-ink-400">{f.label}: </span>
+                    <span className="text-ink-700">{String(val)}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
           {progres.catatan && (
             <div className="text-sm text-ink-500 italic mt-2">
               {progres.catatan}
@@ -1040,6 +1074,7 @@ function ProgresCard({
 function ProgresEditForm({
   progres,
   progresType,
+  customFields,
   institusiId,
   onCancel,
   onSuccess,
@@ -1047,6 +1082,7 @@ function ProgresEditForm({
 }: {
   progres: Progres
   progresType: ProgresType
+  customFields: CustomField[]
   institusiId: number
   onCancel: () => void
   onSuccess: () => void
@@ -1364,6 +1400,24 @@ function ProgresEditForm({
         </div>
       </div>
 
+      {/* CUSTOM FIELDS dari admin (edit mode) */}
+      {customFields.length > 0 && (
+        <div className="pt-4 border-t border-line/60 space-y-4">
+          <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-copper-600">
+            Field khusus (diatur admin)
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            {customFields.map((f) => (
+              <CustomFieldInput
+                key={f.key}
+                field={f}
+                defaultValue={progres.custom_values?.[f.key] ?? ''}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div>
         <label className="block text-xs font-medium text-ink-700 mb-1.5">
           Catatan / Keterangan (opsional)
@@ -1393,5 +1447,56 @@ function ProgresEditForm({
         </button>
       </div>
     </form>
+  )
+}
+
+// ============================================================
+// CustomFieldInput — render input berdasarkan type field
+// ============================================================
+
+function CustomFieldInput({
+  field,
+  defaultValue,
+}: {
+  field: CustomField
+  defaultValue?: string | number | null
+}) {
+  const dv = defaultValue ?? ''
+  const name = `custom_${field.key}`
+
+  if (field.type === 'select') {
+    return (
+      <div>
+        <label className="block text-xs font-medium text-ink-700 mb-1.5">
+          {field.label}
+        </label>
+        <select
+          name={name}
+          defaultValue={String(dv)}
+          className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+        >
+          <option value="">— Pilih —</option>
+          {(field.options ?? []).map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <label className="block text-xs font-medium text-ink-700 mb-1.5">
+        {field.label}
+      </label>
+      <input
+        name={name}
+        type={field.type === 'number' ? 'number' : 'text'}
+        defaultValue={String(dv)}
+        className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+      />
+    </div>
   )
 }

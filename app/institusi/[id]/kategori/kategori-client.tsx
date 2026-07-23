@@ -7,6 +7,8 @@ import {
   deleteKategori,
   assignSantriKategori,
   unassignFromKategori,
+  updateKategoriFields,
+  type CustomField,
 } from './actions'
 
 type AssignmentItem = {
@@ -25,6 +27,7 @@ type UstadzGroup = {
 type Kategori = {
   id: number
   nama: string
+  customFields: CustomField[]
   ustadzGroups: UstadzGroup[]
   totalSantri: number
   totalUstadz: number
@@ -322,6 +325,13 @@ function KategoriDetail({
         </div>
       )}
 
+      {/* Panel: kelola field custom */}
+      <CustomFieldsPanel
+        institusiId={institusiId}
+        kategoriId={kategori.id}
+        initialFields={kategori.customFields}
+      />
+
       {/* Form tambah penugasan baru */}
       <AssignForm
         institusiId={institusiId}
@@ -613,6 +623,219 @@ function UstadzCard({
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// ============================================================
+// CUSTOM FIELDS PANEL
+// ============================================================
+
+const typeLabel: Record<CustomField['type'], string> = {
+  text: 'Teks',
+  number: 'Angka',
+  select: 'Pilihan',
+}
+
+function makeFieldKey() {
+  return `f_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
+}
+
+function CustomFieldsPanel({
+  institusiId,
+  kategoriId,
+  initialFields,
+}: {
+  institusiId: number
+  kategoriId: number
+  initialFields: CustomField[]
+}) {
+  const [fields, setFields] = useState<CustomField[]>(initialFields)
+  const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+  const [isDirty, setIsDirty] = useState(false)
+
+  const [newLabel, setNewLabel] = useState('')
+  const [newType, setNewType] = useState<CustomField['type']>('text')
+  const [newOptions, setNewOptions] = useState('')
+
+  const addField = () => {
+    const label = newLabel.trim()
+    if (!label) return
+    if (fields.some((f) => f.label.toLowerCase() === label.toLowerCase())) {
+      setError(`Field "${label}" sudah ada`)
+      return
+    }
+
+    const field: CustomField = {
+      key: makeFieldKey(),
+      label,
+      type: newType,
+    }
+    if (newType === 'select') {
+      const opts = newOptions
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      if (opts.length === 0) {
+        setError('Field tipe Pilihan harus punya minimal 1 opsi')
+        return
+      }
+      field.options = opts
+    }
+
+    setFields([...fields, field])
+    setNewLabel('')
+    setNewOptions('')
+    setNewType('text')
+    setIsDirty(true)
+    setError(null)
+  }
+
+  const removeField = (key: string) => {
+    setFields(fields.filter((f) => f.key !== key))
+    setIsDirty(true)
+  }
+
+  const save = () => {
+    startTransition(async () => {
+      setError(null)
+      setSuccess(false)
+      const result = await updateKategoriFields(institusiId, kategoriId, fields)
+      if (result?.error) {
+        setError(result.error)
+      } else {
+        setSuccess(true)
+        setIsDirty(false)
+        setTimeout(() => setSuccess(false), 3000)
+      }
+    })
+  }
+
+  return (
+    <div className="bg-cream-50 border border-copper-600/30 rounded-xl p-5 mb-4">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div>
+          <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-copper-600">
+            Field custom
+          </div>
+          <div className="text-xs text-ink-500 mt-0.5">
+            Field yang ditampilkan waktu ustadz input setoran di kategori ini.
+          </div>
+        </div>
+        {isDirty && (
+          <button
+            onClick={save}
+            disabled={isPending}
+            className="bg-forest-700 hover:bg-forest-800 disabled:opacity-50 text-cream-50 text-xs font-medium px-4 py-1.5 rounded-lg transition"
+          >
+            {isPending ? 'Menyimpan...' : 'Simpan perubahan'}
+          </button>
+        )}
+      </div>
+
+      {fields.length > 0 && (
+        <div className="space-y-2 mb-4">
+          {fields.map((f) => (
+            <div
+              key={f.key}
+              className="flex items-start justify-between gap-3 bg-cream-100 border border-line rounded-lg px-3 py-2"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium text-forest-800">
+                    {f.label}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider text-copper-600 bg-copper-500/10 border border-copper-500/30 rounded px-1.5 py-0.5">
+                    {typeLabel[f.type]}
+                  </span>
+                </div>
+                {f.type === 'select' && f.options && (
+                  <div className="text-xs text-ink-500 mt-1">
+                    Pilihan: {f.options.join(', ')}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => removeField(f.key)}
+                className="text-xs text-error-500 hover:underline shrink-0"
+              >
+                Hapus
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {fields.length === 0 && !isDirty && (
+        <div className="text-xs text-ink-500 mb-4 italic">
+          Belum ada field custom. Tambah di bawah.
+        </div>
+      )}
+
+      <div className="border-t border-line/60 pt-4">
+        <div className="text-[10px] font-medium uppercase tracking-widest text-ink-500 mb-2">
+          Tambah field
+        </div>
+        <div className="grid sm:grid-cols-[1fr_140px_auto] gap-2 items-end">
+          <div>
+            <label className="block text-xs text-ink-700 mb-1">Label</label>
+            <input
+              type="text"
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              placeholder="Misal: Nama Kitab, Halaman Mulai, Kelancaran"
+              className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-ink-700 mb-1">Tipe</label>
+            <select
+              value={newType}
+              onChange={(e) => setNewType(e.target.value as CustomField['type'])}
+              className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+            >
+              <option value="text">Teks</option>
+              <option value="number">Angka</option>
+              <option value="select">Pilihan</option>
+            </select>
+          </div>
+          <button
+            onClick={addField}
+            disabled={!newLabel.trim()}
+            className="bg-forest-700 hover:bg-forest-800 disabled:opacity-50 text-cream-50 text-sm font-medium px-4 py-2 rounded-lg transition h-fit"
+          >
+            + Tambah
+          </button>
+        </div>
+
+        {newType === 'select' && (
+          <div className="mt-3">
+            <label className="block text-xs text-ink-700 mb-1">
+              Opsi pilihan (pisah pake koma)
+            </label>
+            <input
+              type="text"
+              value={newOptions}
+              onChange={(e) => setNewOptions(e.target.value)}
+              placeholder="Mahir, Cukup, Kurang"
+              className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+            />
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <div className="mt-3 p-2 bg-error-50 border border-error-500/30 rounded-lg text-xs text-error-500">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="mt-3 p-2 bg-success-500/10 border border-success-500/30 rounded-lg text-xs text-success-500">
+          ✓ Field custom tersimpan
+        </div>
+      )}
     </div>
   )
 }

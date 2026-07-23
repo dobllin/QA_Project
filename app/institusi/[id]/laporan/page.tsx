@@ -36,53 +36,38 @@ type ProgresRow = {
   custom_values: Record<string, string | number | null> | null
 }
 
-// Convert "YYYY-Www" ke rentang tanggal Senin-Minggu
-function weekToDateRange(weekStr: string): { start: string; end: string } {
-  const match = weekStr.match(/^(\d{4})-W(\d{1,2})$/)
+function monthToDateRange(monthStr: string): { start: string; end: string } {
+  const match = monthStr.match(/^(\d{4})-(\d{1,2})$/)
   if (!match) {
-    // fallback: minggu ini
     const now = new Date()
-    return isoWeekRange(now)
+    return currentMonthRange(now)
   }
   const year = parseInt(match[1])
-  const week = parseInt(match[2])
-
-  // ISO 8601: minggu 1 adalah minggu yg mengandung 4 Januari
-  const jan4 = new Date(Date.UTC(year, 0, 4))
-  const jan4Weekday = jan4.getUTCDay() || 7 // Minggu = 7
-  const week1Monday = new Date(jan4.getTime() - (jan4Weekday - 1) * 86400000)
-  const monday = new Date(week1Monday.getTime() + (week - 1) * 7 * 86400000)
-  const sunday = new Date(monday.getTime() + 6 * 86400000)
-
+  const month = parseInt(match[2])
+  const start = new Date(Date.UTC(year, month - 1, 1))
+  const end = new Date(Date.UTC(year, month, 0))
   return {
-    start: monday.toISOString().slice(0, 10),
-    end: sunday.toISOString().slice(0, 10),
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
   }
 }
 
-function isoWeekRange(d: Date): { start: string; end: string } {
-  const day = d.getUTCDay() || 7
-  const monday = new Date(d.getTime() - (day - 1) * 86400000)
-  monday.setUTCHours(0, 0, 0, 0)
-  const sunday = new Date(monday.getTime() + 6 * 86400000)
+function currentMonthRange(d: Date): { start: string; end: string } {
+  const y = d.getFullYear()
+  const m = d.getMonth()
+  const start = new Date(Date.UTC(y, m, 1))
+  const end = new Date(Date.UTC(y, m + 1, 0))
   return {
-    start: monday.toISOString().slice(0, 10),
-    end: sunday.toISOString().slice(0, 10),
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
   }
 }
 
-function getCurrentWeekStr(): string {
+function getCurrentMonthStr(): string {
   const now = new Date()
-  const tempDate = new Date(
-    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
-  )
-  const dayNum = tempDate.getUTCDay() || 7
-  tempDate.setUTCDate(tempDate.getUTCDate() + 4 - dayNum)
-  const yearStart = new Date(Date.UTC(tempDate.getUTCFullYear(), 0, 1))
-  const weekNum = Math.ceil(
-    ((tempDate.getTime() - yearStart.getTime()) / 86400000 + 1) / 7
-  )
-  return `${tempDate.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}`
 }
 
 export default async function LaporanPage({
@@ -90,12 +75,12 @@ export default async function LaporanPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ santri?: string; minggu?: string }>
+  searchParams: Promise<{ santri?: string; bulan?: string }>
 }) {
   const { id } = await params
   const sp = await searchParams
   const santriId = sp.santri
-  const currentMinggu = sp.minggu ?? getCurrentWeekStr()
+  const currentBulan = sp.bulan ?? getCurrentMonthStr()
   const institusiId = Number(id)
 
   const supabase = await createClient()
@@ -170,7 +155,7 @@ export default async function LaporanPage({
 
   const { data: santriList } = await santriListQuery
 
-  const { start: startDate, end: endDate } = weekToDateRange(currentMinggu)
+  const { start: startDate, end: endDate } = monthToDateRange(currentBulan)
 
   let santriData = null
   if (santriId) {
@@ -180,7 +165,7 @@ export default async function LaporanPage({
     if (canAccess) {
       const { data: santri } = await supabase
         .from('santri')
-        .select('id, nama, kelas, halaqoh, tahun_masuk, poin')
+        .select('id, nama, kelas, halaqoh, tahun_masuk, poin, wali_kelas_id')
         .eq('id', santriId)
         .eq('institusi_id', institusiId)
         .single()
@@ -232,12 +217,20 @@ export default async function LaporanPage({
           { data: kategoriList },
           { data: progressList },
           { data: poinList },
+          { data: kehadiranList },
         ] = await Promise.all([
           kategoriQuery,
           progressQuery,
           supabase
             .from('poin_log')
             .select('id, jenis, nilai_perubahan, keterangan, tanggal')
+            .eq('santri_id', santriId)
+            .gte('tanggal', startDate)
+            .lte('tanggal', endDate)
+            .order('tanggal', { ascending: true }),
+          supabase
+            .from('kehadiran')
+            .select('id, tanggal, status, keterangan')
             .eq('santri_id', santriId)
             .gte('tanggal', startDate)
             .lte('tanggal', endDate)
@@ -274,23 +267,53 @@ export default async function LaporanPage({
           (k) => k.progres.length > 0
         )
 
-        const totalWithAbsen = (progressList ?? []).filter(
-          (p) => p.absen !== null
-        ).length
-        const totalHadir = (progressList ?? []).filter(
-          (p) => p.absen === false
-        ).length
-        const totalTidakHadir = (progressList ?? []).filter(
-          (p) => p.absen === true
-        ).length
+        const kehadiranRows = (kehadiranList ?? []) as {
+          id: string
+          tanggal: string
+          status: string
+          keterangan: string | null
+        }[]
+
+        const kehadiranCount = {
+          hadir: kehadiranRows.filter((k) => k.status === 'hadir').length,
+          izin: kehadiranRows.filter((k) => k.status === 'izin').length,
+          sakit: kehadiranRows.filter((k) => k.status === 'sakit').length,
+          alpha: kehadiranRows.filter((k) => k.status === 'alpha').length,
+        }
+        const totalTercatat =
+          kehadiranCount.hadir +
+          kehadiranCount.izin +
+          kehadiranCount.sakit +
+          kehadiranCount.alpha
+
+        // Fetch wali kelas info (nama + ttd_url) kalo santri punya wali_kelas_id
+        let waliKelas: { id: string; nama: string; ttd_url: string | null } | null = null
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const walikelasId = (santri as any).wali_kelas_id
+        if (walikelasId) {
+          const { data: wk } = await supabase
+            .from('profiles')
+            .select('id, nama, ttd_url')
+            .eq('id', walikelasId)
+            .single()
+          if (wk) {
+            waliKelas = {
+              id: wk.id,
+              nama: wk.nama,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ttd_url: (wk as any).ttd_url ?? null,
+            }
+          }
+        }
 
         santriData = {
           santri,
+          waliKelas,
           kategoriList: kategoriWithProgres,
           totalSetoran: (progressList ?? []).length,
-          totalWithAbsen,
-          totalHadir,
-          totalTidakHadir,
+          kehadiranList: kehadiranRows,
+          kehadiranCount,
+          totalKehadiranTercatat: totalTercatat,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           poinLog: (poinList ?? []) as any[],
           poinAwal:
@@ -308,9 +331,9 @@ export default async function LaporanPage({
       institusiId={institusiId}
       santriList={santriList ?? []}
       currentSantriId={santriId ?? null}
-      currentMinggu={currentMinggu}
-      weekStart={startDate}
-      weekEnd={endDate}
+      currentBulan={currentBulan}
+      periodStart={startDate}
+      periodEnd={endDate}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       santriData={santriData as any}
     />
