@@ -58,10 +58,12 @@ export default async function SantriDetailPage({
 
   let query = supabase
     .from('ustadz_santri')
-    // custom_fields dibuang dari embed: SantriDetailClient gak pernah make-nya,
-    // tapi kalau kolomnya gak ada di DB, PostgREST bikin SELURUH query error →
-    // assignments null → kategoriMap kosong → notFound() alias 404.
-    .select('kategori_id, ustadz_id, kategori(id, nama), profiles:ustadz_id(nama)')
+    // custom_fields WAJIB ikut di sini. Tanpa ini, k.custom_fields selalu
+    // undefined → customFields jadi [] → field custom bikinan admin tidak
+    // pernah muncul di form setoran ustadz.
+    .select(
+      'kategori_id, ustadz_id, kategori(id, nama, custom_fields), profiles:ustadz_id(nama)'
+    )
     .eq('santri_id', santriId)
 
   if (!isAdmin) {
@@ -107,7 +109,8 @@ export default async function SantriDetailPage({
   if (isAdmin && kategoriMap.size === 0) {
     const { data: allKategori } = await supabase
       .from('kategori')
-      .select('id, nama')
+      // custom_fields juga wajib di sini, alasan sama seperti di atas.
+      .select('id, nama, custom_fields')
       .eq('institusi_id', institusiId)
       .order('nama')
 

@@ -9,7 +9,6 @@ const peranLabel: Record<string, string> = {
   admin: 'Admin institusi',
 }
 
-
 const jenisLabel: Record<string, string> = {
   RA: 'Raudhatul Athfal',
   TPQ: 'Taman Pendidikan Quran',
@@ -75,7 +74,8 @@ export default async function InstitusiLayout({
     .select('institusi_id', { count: 'exact', head: true })
     .eq('user_id', user.id)
 
-  const hasMultipleInstitusi = (totalAssignments ?? 0) > 1 || profile.is_super_admin
+  const hasMultipleInstitusi =
+    (totalAssignments ?? 0) > 1 || profile.is_super_admin
 
   return (
     <div className="min-h-screen flex">
@@ -102,17 +102,31 @@ export default async function InstitusiLayout({
           <NavItem href={`/institusi/${institusi.id}/santri`}>
             {isAdmin ? 'Semua santri' : 'Santri saya'}
           </NavItem>
-          <NavItem href={`/institusi/${institusi.id}/kategori`}>
-            {isAdmin ? 'Kategori' : 'Kategori saya'}
+
+          {/*
+            Kategori & Kehadiran khusus admin.
+            Ustadz sengaja dibuat seringkas mungkin: dari Ringkasan langsung
+            klik nama santri -> isi kehadiran + setoran di satu form.
+          */}
+          {isAdmin && (
+            <>
+              <NavItem href={`/institusi/${institusi.id}/kategori`}>
+                Kategori
+              </NavItem>
+              <NavItem href={`/institusi/${institusi.id}/kehadiran`}>
+                Kehadiran
+              </NavItem>
+            </>
+          )}
+
+          <NavItem href={`/institusi/${institusi.id}/laporan`}>
+            {isAdmin ? 'Laporan' : 'Laporan & absensi'}
           </NavItem>
-         {isAdmin && (
-  <>
-    <NavItem href={`/institusi/${institusi.id}/kehadiran`}>Kehadiran</NavItem>
-    <NavItem href={`/institusi/${institusi.id}/laporan`}>Laporan</NavItem>
-  </>
-)}
+
           {isPondok && (
-            <NavItem href={`/institusi/${institusi.id}/recap`}>Recap poin</NavItem>
+            <NavItem href={`/institusi/${institusi.id}/recap`}>
+              Recap poin
+            </NavItem>
           )}
         </nav>
 
@@ -122,7 +136,10 @@ export default async function InstitusiLayout({
               href={profile.is_super_admin ? '/super' : '/institusi'}
               className="block text-xs text-ink-500 hover:text-ink-900 transition"
             >
-              ← {profile.is_super_admin ? 'Dashboard super admin' : 'Pilih institusi lain'}
+              ←{' '}
+              {profile.is_super_admin
+                ? 'Dashboard super admin'
+                : 'Pilih institusi lain'}
             </Link>
           )}
           <form action={logout}>

@@ -36,6 +36,13 @@ type ProgresRow = {
   custom_values: Record<string, string | number | null> | null
 }
 
+type KehadiranRow = {
+  id: string
+  tanggal: string
+  status: string
+  keterangan: string | null
+}
+
 function monthToDateRange(monthStr: string): { start: string; end: string } {
   const match = monthStr.match(/^(\d{4})-(\d{1,2})$/)
   if (!match) {
@@ -267,12 +274,53 @@ export default async function LaporanPage({
           (k) => k.progres.length > 0
         )
 
-        const kehadiranRows = (kehadiranList ?? []) as {
-          id: string
-          tanggal: string
-          status: string
-          keterangan: string | null
-        }[]
+        // ============================================================
+        // KEHADIRAN — digabung dari DUA sumber:
+        //   1. kolom progress.absen  → diisi ustadz lewat form setoran
+        //   2. tabel kehadiran       → diisi admin lewat halaman Kehadiran
+        //
+        // Ingat semantik kolom lama: absen === false berarti HADIR.
+        // progress bisa punya lebih dari satu baris di tanggal yang sama
+        // (santri ikut beberapa kategori). Aturannya: kalau di tanggal itu
+        // ada satu saja yang hadir, santri dianggap hadir hari itu.
+        //
+        // Catatan admin di tabel kehadiran lebih otoritatif, jadi ia
+        // menimpa hasil dari progress kalau tanggalnya bentrok.
+        // ============================================================
+        const kehadiranMap = new Map<string, KehadiranRow>()
+
+        for (const p of (progressList ?? []) as ProgresRow[]) {
+          if (p.absen === null || p.absen === undefined) continue
+          const tgl = String(p.tanggal).slice(0, 10)
+          const status = p.absen === false ? 'hadir' : 'alpha'
+          const existing = kehadiranMap.get(tgl)
+          if (!existing) {
+            kehadiranMap.set(tgl, {
+              id: `progress-${tgl}`,
+              tanggal: tgl,
+              status,
+              keterangan: null,
+            })
+          } else if (existing.status !== 'hadir' && status === 'hadir') {
+            kehadiranMap.set(tgl, { ...existing, status: 'hadir' })
+          }
+        }
+
+        for (const k of kehadiranList ?? []) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const kAny = k as any
+          const tgl = String(kAny.tanggal).slice(0, 10)
+          kehadiranMap.set(tgl, {
+            id: kAny.id,
+            tanggal: tgl,
+            status: kAny.status,
+            keterangan: kAny.keterangan ?? null,
+          })
+        }
+
+        const kehadiranRows = Array.from(kehadiranMap.values()).sort((a, b) =>
+          a.tanggal.localeCompare(b.tanggal)
+        )
 
         const kehadiranCount = {
           hadir: kehadiranRows.filter((k) => k.status === 'hadir').length,

@@ -139,7 +139,13 @@ export default function KategoriClient({
           existingNames={kategori.map((k) => k.nama.toLowerCase())}
         />
       ) : activeKategori ? (
+        // key WAJIB ada. Tanpa ini, waktu pindah tab React memakai ulang
+        // komponen yang sama, sehingga useState(initialFields) di
+        // CustomFieldsPanel tidak pernah dijalankan lagi — field custom
+        // kategori sebelumnya nyangkut dan bisa ikut tersimpan ke kategori
+        // yang salah. key yang berubah memaksa React memasang ulang.
         <KategoriDetail
+          key={activeKategori.id}
           kategori={activeKategori}
           institusiId={institusiId}
           ustadzList={ustadzList}
@@ -325,8 +331,11 @@ function KategoriDetail({
         </div>
       )}
 
-      {/* Panel: kelola field custom */}
+      {/* Panel: kelola field custom. key ganda di sini sengaja, biar panel
+          tetap ter-reset walaupun suatu saat KategoriDetail dipakai ulang
+          di tempat lain tanpa key. */}
       <CustomFieldsPanel
+        key={kategori.id}
         institusiId={institusiId}
         kategoriId={kategori.id}
         initialFields={kategori.customFields}
@@ -650,6 +659,9 @@ function CustomFieldsPanel({
   kategoriId: number
   initialFields: CustomField[]
 }) {
+  // CATATAN: initialFields cuma dibaca sekali saat komponen dipasang.
+  // Yang menjaga panel ini tetap sinkron dengan tab aktif adalah `key`
+  // di pemanggilnya. Jangan hapus key itu.
   const [fields, setFields] = useState<CustomField[]>(initialFields)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)

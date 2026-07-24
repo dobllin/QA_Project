@@ -6,6 +6,10 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import KehadiranClient from './kehadiran-client'
 
+// UUID mustahil, dipakai buat memaksa query balik kosong.
+// Pola yang sama sudah dipakai di app/institusi/[id]/laporan/page.tsx.
+const NO_MATCH = '00000000-0000-0000-0000-000000000000'
+
 export default async function KehadiranPage({
   params,
   searchParams,
@@ -42,29 +46,67 @@ export default async function KehadiranPage({
     isAdmin = (adminCheck?.length ?? 0) > 0
   }
 
-  if (!isAdmin) redirect(`/institusi/${institusiId}`)
+  // Ustadz/ustadzah boleh masuk juga, tapi hanya untuk santri ampuannya.
+  // mySantriIds === null artinya admin: lihat semua santri se-institusi.
+  let mySantriIds: string[] | null = null
 
-  const [
-    { data: institusi },
-    { data: santriList },
-    { data: kehadiranList },
-  ] = await Promise.all([
-    supabase
-      .from('institusi')
-      .select('id, nama, jenis')
-      .eq('id', institusiId)
-      .single(),
-    supabase
-      .from('santri')
-      .select('id, nama, kelas, halaqoh')
+  if (!isAdmin) {
+    const { data: pengajarCheck } = await supabase
+      .from('user_institusi')
+      .select('peran')
+      .eq('user_id', user.id)
       .eq('institusi_id', institusiId)
-      .order('nama'),
-    supabase
-      .from('kehadiran')
-      .select('id, santri_id, status, keterangan')
-      .eq('institusi_id', institusiId)
-      .eq('tanggal', tanggal),
-  ])
+      .in('peran', ['ustadz', 'ustadzah'])
+
+    // Bukan admin, bukan pengajar di institusi ini → tendang keluar.
+    if (!pengajarCheck || pengajarCheck.length === 0) {
+      redirect(`/institusi/${institusiId}`)
+    }
+
+    const { data: assignments } = await supabase
+      .from('ustadz_santri')
+      .select('santri_id')
+      .eq('ustadz_id', user.id)
+
+    mySantriIds = Array.from(
+      new Set((assignments ?? []).map((a) => a.santri_id))
+    )
+  }
+
+  // Scope daftar santri sesuai peran.
+  let santriQuery = supabase
+    .from('santri')
+    .select('id, nama, kelas, halaqoh')
+    .eq('institusi_id', institusiId)
+    .order('nama')
+
+  // Scope kehadiran juga, biar ustadz tidak menarik data santri orang lain.
+  let kehadiranQuery = supabase
+    .from('kehadiran')
+    .select('id, santri_id, status, keterangan')
+    .eq('institusi_id', institusiId)
+    .eq('tanggal', tanggal)
+
+  if (mySantriIds !== null) {
+    if (mySantriIds.length === 0) {
+      santriQuery = santriQuery.eq('id', NO_MATCH)
+      kehadiranQuery = kehadiranQuery.eq('santri_id', NO_MATCH)
+    } else {
+      santriQuery = santriQuery.in('id', mySantriIds)
+      kehadiranQuery = kehadiranQuery.in('santri_id', mySantriIds)
+    }
+  }
+
+  const [{ data: institusi }, { data: santriList }, { data: kehadiranList }] =
+    await Promise.all([
+      supabase
+        .from('institusi')
+        .select('id, nama, jenis')
+        .eq('id', institusiId)
+        .single(),
+      santriQuery,
+      kehadiranQuery,
+    ])
 
   if (!institusi) notFound()
 

@@ -162,10 +162,12 @@ export default function LaporanClient({
   const printRef = useRef<HTMLDivElement>(null)
   const [isDownloading, setIsDownloading] = useState(false)
 
-  const updateQuery = (santri: string, minggu: string) => {
+  const updateQuery = (santri: string, bulan: string) => {
     const params = new URLSearchParams()
     if (santri) params.set('santri', santri)
-    if (minggu) params.set('minggu', minggu)
+    // WAJIB 'bulan' — page.tsx membaca searchParams.bulan.
+    // Dulu ini ditulis 'minggu' sehingga picker bulan tidak pernah berpengaruh.
+    if (bulan) params.set('bulan', bulan)
     router.push(`/institusi/${institusiId}/laporan?${params.toString()}`)
   }
 
@@ -195,7 +197,7 @@ export default function LaporanClient({
     }
   }
 
-  // Total kehadiran mingguan
+  // Total kehadiran bulanan
   const totalHariEfektif = santriData?.totalKehadiranTercatat ?? 0
   const persenHadir =
     santriData && totalHariEfektif > 0
@@ -215,7 +217,7 @@ export default function LaporanClient({
               Laporan
             </h1>
             <p className="mt-4 text-sm text-ink-500 max-w-md leading-relaxed">
-              Cetak rapor mingguan santri buat wali murid. Pilih santri dan
+              Cetak rapor bulanan santri buat wali murid. Pilih santri dan
               bulan, lalu download PDF.
             </p>
           </div>
@@ -384,7 +386,7 @@ export default function LaporanClient({
             </table>
           </div>
 
-          {/* Ringkasan minggu */}
+          {/* Ringkasan bulan */}
           <div
             className="mb-6 grid grid-cols-3 gap-3"
             style={{ pageBreakInside: 'avoid' }}
@@ -661,8 +663,7 @@ export default function LaporanClient({
                               className="py-1 px-2 align-top"
                               style={{ border: '1px solid #000' }}
                             >
-                              {renderMateri(p)}
-                              {renderCustom(p, k.customFields)}
+                              {renderMateri(p, k.customFields)}
                               {p.catatan && (
                                 <div className="italic mt-0.5 text-[10px]">
                                   {p.catatan}
@@ -750,7 +751,16 @@ export default function LaporanClient({
   )
 }
 
-function renderMateri(p: ProgresRow) {
+// ============================================================
+// renderMateri — isi kolom "Materi" di tabel setoran.
+//
+// Kategori tanpa materi standar (bukan tahfiz/kitab/iqro) dulu cuma dapat
+// tanda "—" di baris utama, sementara isi sebenarnya nyempil di baris kecil
+// di bawahnya. Sekarang: kalau tidak ada materi standar sama sekali, field
+// custom NAIK jadi baris utama, jadi kolomnya tidak pernah kosong percuma.
+// Kalau materi standar ada, field custom tetap tampil di bawahnya.
+// ============================================================
+function renderMateri(p: ProgresRow, customFields: CustomField[] = []) {
   const parts: string[] = []
   if (p.jenis_setoran) {
     parts.push(jenisSetoranLabel[p.jenis_setoran] ?? p.jenis_setoran)
@@ -768,27 +778,27 @@ function renderMateri(p: ProgresRow) {
   if (p.iqro_jilid) parts.push(`Jilid ${p.iqro_jilid}`)
   if (p.iqro_halaman) parts.push(`Hal ${p.iqro_halaman}`)
 
-  return <div>{parts.join(' · ') || '—'}</div>
-}
-
-function renderCustom(p: ProgresRow, customFields: CustomField[]) {
-  const entries = customFields
+  const customEntries = customFields
     .map((f) => ({
       label: f.label,
       value: p.custom_values?.[f.key] ?? null,
     }))
     .filter((e) => e.value !== null && e.value !== '')
 
-  if (entries.length === 0) return null
+  const customText = customEntries
+    .map((e) => `${e.label}: ${String(e.value)}`)
+    .join(' · ')
 
+  // Tidak ada materi standar → field custom jadi baris utama.
+  if (parts.length === 0) {
+    return <div>{customText || '—'}</div>
+  }
+
+  // Ada materi standar → field custom tampil kecil di bawahnya.
   return (
-    <div className="text-[10px] mt-0.5">
-      {entries.map((e, i) => (
-        <span key={i}>
-          {i > 0 ? ' · ' : ''}
-          {e.label}: {String(e.value)}
-        </span>
-      ))}
-    </div>
+    <>
+      <div>{parts.join(' · ')}</div>
+      {customText && <div className="text-[10px] mt-0.5">{customText}</div>}
+    </>
   )
 }

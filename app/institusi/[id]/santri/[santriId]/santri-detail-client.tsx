@@ -149,6 +149,7 @@ export default function SantriDetailClient({
   institusiId,
   isAdmin,
   isPondok,
+  initialKategoriId,
 }: {
   santri: Santri
   kategoriList: Kategori[]
@@ -157,9 +158,17 @@ export default function SantriDetailClient({
   institusiId: number
   isAdmin: boolean
   isPondok: boolean
+  // dikirim dari page.tsx lewat ?kategori=<id> di URL (link checklist Ringkasan)
+  initialKategoriId?: number | null
 }) {
+  // Kalau ?kategori=<id> valid dan memang kategori yang diampu, buka tab itu.
+  // Kalau tidak, jatuh ke kategori pertama seperti sebelumnya.
+  const initialValid =
+    initialKategoriId != null &&
+    kategoriList.some((k) => k.id === initialKategoriId)
+
   const [activeKategoriId, setActiveKategoriId] = useState<number>(
-    kategoriList[0]?.id ?? 0
+    (initialValid ? initialKategoriId : kategoriList[0]?.id) ?? 0
   )
   const [showForm, setShowForm] = useState(true)
 
@@ -273,6 +282,9 @@ export default function SantriDetailClient({
                     customFields={activeKategori.customFields ?? []}
                     institusiId={institusiId}
                     isAdmin={isAdmin}
+                    tanggalTerisi={filteredHistory.map(
+                      (p) => p.tanggal.split('T')[0]
+                    )}
                   />
                 )}
               </div>
@@ -520,6 +532,7 @@ function ProgresForm({
   customFields,
   institusiId,
   isAdmin,
+  tanggalTerisi,
 }: {
   santriId: string
   kategoriId: number
@@ -527,11 +540,18 @@ function ProgresForm({
   customFields: CustomField[]
   institusiId: number
   isAdmin: boolean
+  // tanggal yang sudah punya setoran di kategori ini (format YYYY-MM-DD)
+  tanggalTerisi: string[]
 }) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [formKey, setFormKey] = useState(0)
+  const [tanggal, setTanggal] = useState(today())
+
+  // Satu setoran per santri per kategori per hari (dijaga unique index di DB).
+  // Dicegah dari sini biar user tidak menekan tombol lalu baru ditolak.
+  const sudahAda = tanggalTerisi.includes(tanggal)
 
   const progresType: ProgresType = isAdmin ? 'tahfiz' : getProgresType(kategoriNama)
 
@@ -539,6 +559,7 @@ function ProgresForm({
     <form
       key={formKey}
       action={(fd) => {
+        if (sudahAda) return
         startTransition(async () => {
           setError(null)
           setSuccess(false)
@@ -563,7 +584,8 @@ function ProgresForm({
             name="tanggal"
             type="date"
             required
-            defaultValue={today()}
+            value={tanggal}
+            onChange={(e) => setTanggal(e.target.value)}
             className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
           />
         </div>
@@ -782,6 +804,33 @@ function ProgresForm({
       {progresType !== 'kitab' && (
         <div>
           <label className="block text-xs font-medium text-ink-700 mb-2">
+            Kehadiran
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: 'false', label: 'Hadir' },
+              { value: 'true', label: 'Tidak hadir' },
+            ].map((k) => (
+              <label key={k.value} className="cursor-pointer inline-flex">
+                <input
+                  type="radio"
+                  name="absen"
+                  value={k.value}
+                  className="peer sr-only"
+                  defaultChecked={k.value === 'false'}
+                />
+                <span className="px-4 py-1.5 border border-line rounded-lg text-sm text-ink-700 peer-checked:bg-forest-700 peer-checked:text-cream-50 peer-checked:border-forest-700 transition">
+                  {k.label}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {progresType !== 'kitab' && (
+        <div>
+          <label className="block text-xs font-medium text-ink-700 mb-2">
             Kelancaran
           </label>
           <div className="flex flex-wrap gap-2">
@@ -866,13 +915,27 @@ function ProgresForm({
         </div>
       )}
 
+      {sudahAda && (
+        <div className="p-3 bg-copper-500/10 border border-copper-500/30 rounded-lg text-sm text-copper-600">
+          Tanggal ini sudah punya setoran di kategori{' '}
+          <span className="font-medium">{kategoriNama}</span>. Satu santri cuma
+          bisa satu setoran per hari per kategori — ubah lewat tombol{' '}
+          <span className="font-medium">Edit</span> di Riwayat setoran di bawah,
+          atau pilih tanggal lain.
+        </div>
+      )}
+
       <div className="flex items-center gap-3">
         <button
           type="submit"
-          disabled={isPending}
-          className="bg-forest-700 hover:bg-forest-800 disabled:opacity-50 text-cream-50 text-sm font-medium px-5 py-2 rounded-lg transition"
+          disabled={isPending || sudahAda}
+          className="bg-forest-700 hover:bg-forest-800 disabled:opacity-50 disabled:cursor-not-allowed text-cream-50 text-sm font-medium px-5 py-2 rounded-lg transition"
         >
-          {isPending ? 'Menyimpan...' : 'Simpan setoran'}
+          {isPending
+            ? 'Menyimpan...'
+            : sudahAda
+            ? 'Sudah ada setoran hari ini'
+            : 'Simpan setoran'}
         </button>
       </div>
     </form>
@@ -981,7 +1044,7 @@ function ProgresCard({
                 {progres.lancar ? 'Lancar' : 'Tidak lancar'}
               </span>
             )}
-            {progresType === 'kitab' && progres.absen !== null && (
+            {progres.absen !== null && (
               <span
                 className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded border ${
                   progres.absen === false
@@ -1343,6 +1406,37 @@ function ProgresEditForm({
               defaultValue={progres.iqro_halaman ?? ''}
               className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
             />
+          </div>
+        </div>
+      )}
+
+      {progresType !== 'kitab' && (
+        <div>
+          <label className="block text-xs font-medium text-ink-700 mb-2">
+            Kehadiran
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: 'false', label: 'Hadir' },
+              { value: 'true', label: 'Tidak hadir' },
+            ].map((k) => (
+              <label key={k.value} className="cursor-pointer inline-flex">
+                <input
+                  type="radio"
+                  name="absen"
+                  value={k.value}
+                  className="peer sr-only"
+                  defaultChecked={
+                    progres.absen === null
+                      ? k.value === 'false'
+                      : String(progres.absen) === k.value
+                  }
+                />
+                <span className="px-4 py-1.5 border border-line rounded-lg text-sm text-ink-700 peer-checked:bg-forest-700 peer-checked:text-cream-50 peer-checked:border-forest-700 transition">
+                  {k.label}
+                </span>
+              </label>
+            ))}
           </div>
         </div>
       )}
