@@ -178,15 +178,17 @@ export default function LaporanClient({
       // Dynamic import biar library cuma di-load di browser
       const html2pdf = (await import('html2pdf.js')).default
       const fileName = `Laporan-${santriData.santri.nama}-${currentBulan}.pdf`
-      await html2pdf()
-        .set({
+      // html2pdf menerima 'pagebreak' saat runtime; tipe bawaannya belum mencakup itu.
+      const pdfOpt: any = {
           margin: [10, 10, 10, 10],
           filename: fileName,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
-        })
+        }
+      await html2pdf()
+        .set(pdfOpt)
         .from(printRef.current)
         .save()
     } catch (err) {

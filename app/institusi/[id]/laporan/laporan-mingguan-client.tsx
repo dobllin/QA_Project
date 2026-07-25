@@ -139,8 +139,8 @@ export default function LaporanMingguanClient({
     setSedangUnduh(ustadzId)
     try {
       const html2pdf = (await import('html2pdf.js')).default
-      await html2pdf()
-        .set({
+      // html2pdf menerima 'pagebreak' saat runtime; tipe bawaannya belum mencakup itu.
+      const pdfOpt: any = {
           margin: [10, 10, 10, 10],
           filename: `Laporan-Mingguan-${amanUntukNamaFile(
             ustadzNama
@@ -149,7 +149,9 @@ export default function LaporanMingguanClient({
           html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
-        })
+        }
+      await html2pdf()
+        .set(pdfOpt)
         .from(el)
         .save()
     } catch (err) {
