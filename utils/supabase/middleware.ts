@@ -53,4 +53,4 @@ export async function updateSession(request: NextRequest) {
     console.error('[middleware] gagal memeriksa sesi:', err)
     return NextResponse.next({ request })
   }
-}git add .
+}
