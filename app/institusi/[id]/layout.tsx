@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { logout } from '../../login/actions'
+import AppShell from '@/app/components/app-shell'
 
 const peranLabel: Record<string, string> = {
   ustadz: 'Ustadz',
@@ -78,85 +79,90 @@ export default async function InstitusiLayout({
     (totalAssignments ?? 0) > 1 || profile.is_super_admin
 
   return (
-    <div className="min-h-screen flex">
-      <aside className="w-64 border-r border-line bg-cream-50 flex flex-col shrink-0">
-        <div className="p-6 border-b border-line">
-          <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-copper-600 mb-1">
+    <AppShell
+      brand={
+        <Link href={`/institusi/${institusi.id}`} className="block min-w-0">
+          <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-copper-600 truncate">
             {jenisLabel[institusi.jenis] ?? institusi.jenis}
           </div>
-          <Link href={`/institusi/${institusi.id}`}>
-            <div className="font-display text-lg text-forest-800 leading-tight">
-              {institusi.nama}
+          <div className="font-display text-base text-forest-800 leading-tight truncate">
+            {institusi.nama}
+          </div>
+        </Link>
+      }
+      sidebar={
+        <>
+          <div className="p-6 border-b border-line">
+            <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-copper-600 mb-1">
+              {jenisLabel[institusi.jenis] ?? institusi.jenis}
             </div>
-          </Link>
-          <div className="mt-3 pt-3 border-t border-line/60">
-            <div className="text-xs text-ink-500 mb-0.5">{profile.nama}</div>
-            <div className="text-[10px] uppercase tracking-widest text-ink-400">
-              {userPerans.map((p) => peranLabel[p] ?? p).join(' · ')}
+            <Link href={`/institusi/${institusi.id}`}>
+              <div className="font-display text-lg text-forest-800 leading-tight">
+                {institusi.nama}
+              </div>
+            </Link>
+            <div className="mt-3 pt-3 border-t border-line/60">
+              <div className="text-xs text-ink-500 mb-0.5">{profile.nama}</div>
+              <div className="text-[10px] uppercase tracking-widest text-ink-400">
+                {userPerans.map((p) => peranLabel[p] ?? p).join(' · ')}
+              </div>
             </div>
           </div>
-        </div>
 
-        <nav className="flex-1 p-3 space-y-0.5">
-          <NavItem href={`/institusi/${institusi.id}`}>Ringkasan</NavItem>
-          <NavItem href={`/institusi/${institusi.id}/santri`}>
-            {isAdmin ? 'Semua santri' : 'Santri saya'}
-          </NavItem>
-
-          {/*
-            Kategori & Kehadiran khusus admin.
-            Ustadz sengaja dibuat seringkas mungkin: dari Ringkasan langsung
-            klik nama santri -> isi kehadiran + setoran di satu form.
-          */}
-          {isAdmin && (
-            <>
-              <NavItem href={`/institusi/${institusi.id}/kategori`}>
-                Kategori
-              </NavItem>
-              <NavItem href={`/institusi/${institusi.id}/kehadiran`}>
-                Kehadiran
-              </NavItem>
-            </>
-          )}
-
-          <NavItem href={`/institusi/${institusi.id}/laporan`}>
-            {isAdmin ? 'Laporan' : 'Laporan & absensi'}
-          </NavItem>
-
-          {isPondok && (
-            <NavItem href={`/institusi/${institusi.id}/recap`}>
-              Recap poin
+          <nav className="flex-1 p-3 space-y-0.5">
+            <NavItem href={`/institusi/${institusi.id}`}>Ringkasan</NavItem>
+            <NavItem href={`/institusi/${institusi.id}/santri`}>
+              {isAdmin ? 'Semua santri' : 'Santri saya'}
             </NavItem>
-          )}
-        </nav>
 
-        <div className="p-4 border-t border-line space-y-2">
-          {hasMultipleInstitusi && (
-            <Link
-              href={profile.is_super_admin ? '/super' : '/institusi'}
-              className="block text-xs text-ink-500 hover:text-ink-900 transition"
-            >
-              ←{' '}
-              {profile.is_super_admin
-                ? 'Dashboard super admin'
-                : 'Pilih institusi lain'}
-            </Link>
-          )}
-          <form action={logout}>
-            <button
-              type="submit"
-              className="text-xs text-ink-500 hover:text-ink-900 transition"
-            >
-              Keluar dari sistem
-            </button>
-          </form>
-        </div>
-      </aside>
+            {isAdmin && (
+              <>
+                <NavItem href={`/institusi/${institusi.id}/kategori`}>
+                  Kategori
+                </NavItem>
+                <NavItem href={`/institusi/${institusi.id}/kehadiran`}>
+                  Kehadiran
+                </NavItem>
+              </>
+            )}
 
-      <main className="flex-1 overflow-auto">
-        <div className="max-w-5xl mx-auto p-8 lg:p-12">{children}</div>
-      </main>
-    </div>
+            <NavItem href={`/institusi/${institusi.id}/laporan`}>
+              {isAdmin ? 'Laporan' : 'Laporan & absensi'}
+            </NavItem>
+
+            {isPondok && (
+              <NavItem href={`/institusi/${institusi.id}/recap`}>
+                Recap poin
+              </NavItem>
+            )}
+          </nav>
+
+          <div className="p-4 border-t border-line space-y-2">
+            {hasMultipleInstitusi && (
+              <Link
+                href={profile.is_super_admin ? '/super' : '/institusi'}
+                className="block text-xs text-ink-500 hover:text-ink-900 transition"
+              >
+                ←{' '}
+                {profile.is_super_admin
+                  ? 'Dashboard super admin'
+                  : 'Pilih institusi lain'}
+              </Link>
+            )}
+            <form action={logout}>
+              <button
+                type="submit"
+                className="text-xs text-ink-500 hover:text-ink-900 transition"
+              >
+                Keluar dari sistem
+              </button>
+            </form>
+          </div>
+        </>
+      }
+    >
+      {children}
+    </AppShell>
   )
 }
 

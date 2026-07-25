@@ -283,227 +283,237 @@ export default function LaporanClient({
       ) : (
         <div
           ref={printRef}
-          className="bg-white text-black p-8"
-          style={{ fontFamily: 'serif' }}
+          className="report-print bg-white"
+          style={{ fontFamily: "var(--font-fraunces), Georgia, serif", color: "#1C1A17" }}
         >
-          {/* KOP SURAT */}
-          <div
-            className="pb-4 mb-6"
-            style={{ borderBottom: '3px double #000' }}
-          >
-            <div className="flex items-center gap-4">
-              <div className="shrink-0">
+          <style>{`
+            .report-print { padding: 26px 30px 30px; }
+            .report-print .rpt-tbl {
+              width: 100%;
+              border-collapse: collapse;
+              font-size: 11.5px;
+            }
+            .report-print .rpt-tbl thead th {
+              background: #2E4034;
+              color: #fff;
+              text-align: left;
+              font-weight: 600;
+              padding: 6px 10px;
+              letter-spacing: 0.02em;
+            }
+            .report-print .rpt-tbl--flush thead th { border-radius: 0; }
+            .report-print .rpt-tbl td {
+              padding: 5px 10px;
+              border-bottom: 1px solid #ECE6D7;
+            }
+            .report-print .rpt-tbl tr:last-child td { border-bottom: 1px solid #D8D0C0; }
+          `}</style>
+          {/* ================= KOP SURAT ================= */}
+          <div style={{ padding: "8px 8px 0" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "18px",
+                paddingBottom: "14px",
+              }}
+            >
+              <div style={{ flexShrink: 0 }}>
                 <Image
                   src="/logo-qa.jpg"
                   alt="Logo Qurrota A'yun"
-                  width={90}
-                  height={90}
+                  width={82}
+                  height={82}
                   className="object-contain"
                   unoptimized
                 />
               </div>
-              <div className="flex-1 text-center">
+              <div style={{ flex: 1, textAlign: "center" }}>
                 <div
-                  className="text-lg mb-1"
-                  style={{ fontFamily: 'serif', direction: 'rtl' }}
+                  style={{
+                    fontSize: "17px",
+                    direction: "rtl",
+                    color: "#2E4034",
+                    marginBottom: "2px",
+                  }}
                 >
                   معهد تحفيظ القران قرة أعين
                 </div>
-                <div className="font-bold text-2xl leading-tight mb-1">
+                <div
+                  style={{
+                    fontWeight: 700,
+                    fontSize: "23px",
+                    lineHeight: 1.1,
+                    letterSpacing: "0.01em",
+                    color: "#1C1A17",
+                  }}
+                >
                   MA&apos;HAD TAHFIDZ QUR&apos;AN QURROTA A&apos;YUN
                 </div>
-                <div className="text-sm font-semibold mb-1">
-                  ( TERAKREDITASI A )
+                <div
+                  style={{
+                    fontSize: "11px",
+                    letterSpacing: "0.28em",
+                    textTransform: "uppercase",
+                    color: "#A9803F",
+                    margin: "3px 0 4px",
+                  }}
+                >
+                  Terakreditasi A
                 </div>
-                <div className="text-xs mb-1">
-                  NSPP : 510331750047 &nbsp; NPSN : 70023433
-                </div>
-                <div className="text-xs leading-tight">
-                  Jl. Batu Jambrut No. 15 Rt.014 Rw.02 Batu Ampar Kramat Jati
+                <div style={{ fontSize: "10.5px", color: "#4A473C", lineHeight: 1.5 }}>
+                  NSPP 510331750047 &nbsp;·&nbsp; NPSN 70023433
+                  <br />
+                  Jl. Batu Jambrut No. 15 RT.014 RW.02 Batu Ampar, Kramat Jati,
                   Jakarta Timur 13520
                   <br />
-                  Telp. (021) 800 3893 · E-mail : qaisindonesia@gmail.com
+                  Telp. (021) 800 3893 &nbsp;·&nbsp; qaisindonesia@gmail.com
                 </div>
               </div>
             </div>
+            {/* garis kop: tebal emas + tipis di bawahnya */}
+            <div style={{ height: "3px", background: "#2E4034" }} />
+            <div style={{ height: "1px", background: "#A9803F", marginTop: "2px" }} />
           </div>
 
-          {/* Judul Laporan */}
-          <div className="text-center mb-6">
-            <div className="font-bold text-xl underline">
-              LAPORAN BULANAN SANTRI
-            </div>
-            <div style={{ fontSize: '13px', marginTop: '2px' }}>
-              Bulan {formatBulan(currentBulan)}
-            </div>
-          </div>
-
-          {/* Info santri */}
-          <div className="mb-6">
-            <div className="font-bold text-sm mb-2 uppercase tracking-wide">
-              Data Santri
-            </div>
-            <table className="w-full text-sm">
-              <tbody>
-                <tr>
-                  <td className="w-32 py-0.5">Nama</td>
-                  <td className="w-4 py-0.5">:</td>
-                  <td className="font-semibold py-0.5">
-                    {santriData.santri.nama}
-                  </td>
-                </tr>
-                {santriData.santri.kelas && (
-                  <tr>
-                    <td className="py-0.5">Kelas</td>
-                    <td className="py-0.5">:</td>
-                    <td className="py-0.5">{santriData.santri.kelas}</td>
-                  </tr>
-                )}
-                {santriData.santri.halaqoh && (
-                  <tr>
-                    <td className="py-0.5">Halaqoh</td>
-                    <td className="py-0.5">:</td>
-                    <td className="py-0.5">{santriData.santri.halaqoh}</td>
-                  </tr>
-                )}
-                {santriData.santri.tahun_masuk && (
-                  <tr>
-                    <td className="py-0.5">Tahun masuk</td>
-                    <td className="py-0.5">:</td>
-                    <td className="py-0.5">{santriData.santri.tahun_masuk}</td>
-                  </tr>
-                )}
-                {santriData.waliKelas && (
-                  <tr>
-                    <td className="py-0.5">Wali Kelas</td>
-                    <td className="py-0.5">:</td>
-                    <td className="py-0.5 font-semibold">
-                      {santriData.waliKelas.nama}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Ringkasan bulan */}
-          <div
-            className="mb-6 grid grid-cols-3 gap-3"
-            style={{ pageBreakInside: 'avoid' }}
-          >
+          {/* ================= JUDUL RAPOR (PITA) ================= */}
+          <div style={{ padding: "22px 8px 0" }}>
             <div
-              className="p-3 text-center"
-              style={{ border: '1px solid #000' }}
+              style={{
+                background: "#2E4034",
+                borderRadius: "3px",
+                padding: "14px 20px",
+                textAlign: "center",
+              }}
             >
-              <div className="text-[10px] uppercase tracking-wider mb-1">
-                Total Setoran
-              </div>
-              <div className="font-bold text-2xl">{santriData.totalSetoran}</div>
-            </div>
-            <div
-              className="p-3 text-center"
-              style={{ border: '1px solid #000' }}
-            >
-              <div className="text-[10px] uppercase tracking-wider mb-1">
-                Kehadiran
-              </div>
-              <div className="font-bold text-2xl">{persenHadir}%</div>
-              <div className="text-[10px] mt-0.5">
-                {santriData.kehadiranCount.hadir}/{totalHariEfektif} hadir
-              </div>
-            </div>
-            <div
-              className="p-3 text-center"
-              style={{ border: '1px solid #000' }}
-            >
-              <div className="text-[10px] uppercase tracking-wider mb-1">
-                Poin Akhir
-              </div>
-              <div className="font-bold text-2xl">{santriData.poinAkhir}</div>
-              <div className="text-[10px] mt-0.5">
-                Awal: {santriData.poinAwal}
-              </div>
-            </div>
-          </div>
-
-          {/* Kehadiran detail */}
-          {santriData.kehadiranList.length > 0 && (
-            <div className="mb-6" style={{ pageBreakInside: 'avoid' }}>
               <div
-                className="font-bold text-sm mb-2 uppercase tracking-wide pb-1"
-                style={{ borderBottom: '2px solid #000' }}
+                style={{
+                  color: "#EBD9B8",
+                  fontSize: "11px",
+                  letterSpacing: "0.34em",
+                  textTransform: "uppercase",
+                }}
               >
-                Bagian 1 · Kehadiran
+                Laporan Perkembangan Santri
               </div>
-              <div className="flex flex-wrap gap-4 text-xs mb-2">
-                <span>
-                  <b>Hadir:</b> {santriData.kehadiranCount.hadir}
-                </span>
-                <span>
-                  <b>Izin:</b> {santriData.kehadiranCount.izin}
-                </span>
-                <span>
-                  <b>Sakit:</b> {santriData.kehadiranCount.sakit}
-                </span>
-                <span>
-                  <b>Alpha:</b> {santriData.kehadiranCount.alpha}
-                </span>
-              </div>
-              <table
-                className="w-full text-xs"
-                style={{ borderCollapse: 'collapse' }}
+              <div
+                style={{
+                  color: "#FFFFFF",
+                  fontWeight: 700,
+                  fontSize: "20px",
+                  letterSpacing: "0.02em",
+                  marginTop: "3px",
+                }}
               >
+                {formatBulan(currentBulan)}
+              </div>
+            </div>
+          </div>
+
+          {/* ================= DATA SANTRI + RINGKASAN ================= */}
+          <div
+            style={{
+              padding: "22px 8px 0",
+              display: "grid",
+              gridTemplateColumns: "1.15fr 1fr",
+              gap: "20px",
+              alignItems: "start",
+            }}
+          >
+            {/* Data santri */}
+            <div>
+              <SectionLabel>Identitas Santri</SectionLabel>
+              <table style={{ width: "100%", fontSize: "12.5px", marginTop: "8px" }}>
+                <tbody>
+                  <DataRow label="Nama" value={santriData.santri.nama} bold />
+                  {santriData.santri.kelas && (
+                    <DataRow label="Kelas" value={santriData.santri.kelas} />
+                  )}
+                  {santriData.santri.halaqoh && (
+                    <DataRow label="Halaqoh" value={santriData.santri.halaqoh} />
+                  )}
+                  {santriData.santri.tahun_masuk && (
+                    <DataRow
+                      label="Tahun masuk"
+                      value={String(santriData.santri.tahun_masuk)}
+                    />
+                  )}
+                  {santriData.waliKelas && (
+                    <DataRow
+                      label="Wali kelas"
+                      value={santriData.waliKelas.nama}
+                      bold
+                    />
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Ringkasan — 3 metrik dalam satu panel krem, dipisah garis emas */}
+            <div
+              style={{
+                background: "#F6F3EC",
+                border: "1px solid #E4DCC8",
+                borderRadius: "6px",
+                padding: "4px 0",
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr",
+              }}
+            >
+              <Metric
+                nilai={String(santriData.totalSetoran)}
+                label="Setoran"
+              />
+              <Metric
+                nilai={`${persenHadir}%`}
+                label="Kehadiran"
+                sub={`${santriData.kehadiranCount.hadir}/${totalHariEfektif}`}
+                divider
+              />
+              <Metric
+                nilai={String(santriData.poinAkhir)}
+                label="Poin"
+                sub={`awal ${santriData.poinAwal}`}
+                divider
+              />
+            </div>
+          </div>
+
+          {/* ================= BAGIAN 1 · KEHADIRAN ================= */}
+          {santriData.kehadiranList.length > 0 && (
+            <div style={{ padding: "26px 8px 0", pageBreakInside: "avoid" }}>
+              <SectionHead no="1" judul="Rekapitulasi Kehadiran" />
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "18px",
+                  fontSize: "12px",
+                  margin: "10px 0 10px",
+                }}
+              >
+                <Pill label="Hadir" n={santriData.kehadiranCount.hadir} tone="hadir" />
+                <Pill label="Izin" n={santriData.kehadiranCount.izin} />
+                <Pill label="Sakit" n={santriData.kehadiranCount.sakit} />
+                <Pill label="Alpha" n={santriData.kehadiranCount.alpha} tone="alpha" />
+              </div>
+              <table className="rpt-tbl">
                 <thead>
                   <tr>
-                    <th
-                      className="text-left py-1 px-2 w-24"
-                      style={{
-                        border: '1px solid #000',
-                        backgroundColor: '#f0f0f0',
-                      }}
-                    >
-                      Tanggal
-                    </th>
-                    <th
-                      className="text-left py-1 px-2 w-24"
-                      style={{
-                        border: '1px solid #000',
-                        backgroundColor: '#f0f0f0',
-                      }}
-                    >
-                      Status
-                    </th>
-                    <th
-                      className="text-left py-1 px-2"
-                      style={{
-                        border: '1px solid #000',
-                        backgroundColor: '#f0f0f0',
-                      }}
-                    >
-                      Keterangan
-                    </th>
+                    <th style={{ width: "120px" }}>Tanggal</th>
+                    <th style={{ width: "120px" }}>Status</th>
+                    <th>Keterangan</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {santriData.kehadiranList.map((k) => (
-                    <tr key={k.id}>
-                      <td
-                        className="py-1 px-2"
-                        style={{ border: '1px solid #000' }}
-                      >
-                        {formatTanggal(k.tanggal)}
-                      </td>
-                      <td
-                        className="py-1 px-2 font-semibold"
-                        style={{ border: '1px solid #000' }}
-                      >
+                  {santriData.kehadiranList.map((k, idx) => (
+                    <tr key={k.id} style={{ background: idx % 2 ? "#FBF9F3" : "#FFF" }}>
+                      <td>{formatTanggal(k.tanggal)}</td>
+                      <td style={{ fontWeight: 600 }}>
                         {statusKehadiranLabel[k.status] ?? k.status}
                       </td>
-                      <td
-                        className="py-1 px-2 italic"
-                        style={{ border: '1px solid #000' }}
-                      >
-                        {k.keterangan ?? '—'}
+                      <td style={{ fontStyle: "italic", color: "#4A473C" }}>
+                        {k.keterangan ?? "—"}
                       </td>
                     </tr>
                   ))}
@@ -512,174 +522,163 @@ export default function LaporanClient({
             </div>
           )}
 
-          {/* Rekap Poin */}
+          {/* ================= BAGIAN 2 · POIN ================= */}
           {santriData.poinLog.length > 0 && (
-            <div className="mb-6" style={{ pageBreakInside: 'avoid' }}>
-              <div
-                className="font-bold text-sm mb-2 uppercase tracking-wide pb-1"
-                style={{ borderBottom: '2px solid #000' }}
-              >
-                Bagian 2 · Poin Disiplin
+            <div style={{ padding: "26px 8px 0", pageBreakInside: "avoid" }}>
+              <SectionHead no="2" judul="Poin Disiplin" />
+              <div style={{ marginTop: "8px" }}>
+                {santriData.poinLog.map((log) => {
+                  const naik = log.nilai_perubahan > 0
+                  return (
+                    <div
+                      key={log.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "baseline",
+                        gap: "12px",
+                        fontSize: "12px",
+                        padding: "3px 0",
+                        borderBottom: "1px solid #EFEADD",
+                      }}
+                    >
+                      <div style={{ width: "96px", flexShrink: 0, color: "#4A473C" }}>
+                        {formatTanggal(log.tanggal)}
+                      </div>
+                      <div
+                        style={{
+                          width: "42px",
+                          textAlign: "right",
+                          flexShrink: 0,
+                          fontWeight: 700,
+                          color: naik ? "#2E6B4F" : "#A23B3B",
+                        }}
+                      >
+                        {naik ? "+" : ""}
+                        {log.nilai_perubahan}
+                      </div>
+                      <div style={{ width: "130px", flexShrink: 0 }}>
+                        {poinJenisLabel[log.jenis] ?? log.jenis}
+                      </div>
+                      <div style={{ fontStyle: "italic", color: "#4A473C", flex: 1 }}>
+                        {log.keterangan ?? "—"}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-              {santriData.poinLog.map((log) => (
-                <div
-                  key={log.id}
-                  className="flex items-baseline gap-3 text-xs py-0.5"
-                >
-                  <div className="w-24 shrink-0">
-                    {formatTanggal(log.tanggal)}
-                  </div>
-                  <div className="w-12 font-bold text-right shrink-0">
-                    {log.nilai_perubahan > 0 ? '+' : ''}
-                    {log.nilai_perubahan}
-                  </div>
-                  <div className="w-32 shrink-0">
-                    {poinJenisLabel[log.jenis] ?? log.jenis}
-                  </div>
-                  <div className="italic flex-1">{log.keterangan ?? '—'}</div>
-                </div>
-              ))}
             </div>
           )}
 
-          {/* Rekap Setoran per kategori */}
+          {/* ================= BAGIAN 3 · SETORAN ================= */}
           {santriData.kategoriList.length > 0 && (
-            <div>
-              <div
-                className="font-bold text-sm mb-2 uppercase tracking-wide pb-1"
-                style={{ borderBottom: '2px solid #000' }}
-              >
-                Bagian 3 · Setoran &amp; Progres Pembelajaran
-              </div>
+            <div style={{ padding: "26px 8px 0" }}>
+              <SectionHead no="3" judul="Setoran & Progres Pembelajaran" />
 
               {santriData.kategoriList.map((k) => {
-                const lancar = k.progres.filter(
-                  (p) => p.lancar === true
-                ).length
-                const totalLancar = k.progres.filter(
-                  (p) => p.lancar !== null
-                ).length
+                const lancar = k.progres.filter((p) => p.lancar === true).length
+                const totalLancar = k.progres.filter((p) => p.lancar !== null).length
                 const nilaiCounts: Record<string, number> = {}
                 for (const p of k.progres) {
-                  if (p.kualitas) {
-                    nilaiCounts[p.kualitas] =
-                      (nilaiCounts[p.kualitas] ?? 0) + 1
-                  }
+                  if (p.kualitas)
+                    nilaiCounts[p.kualitas] = (nilaiCounts[p.kualitas] ?? 0) + 1
                 }
-
                 return (
                   <div
                     key={k.id}
-                    className="mb-5"
-                    style={{ pageBreakInside: 'avoid' }}
+                    style={{ marginTop: "14px", pageBreakInside: "avoid" }}
                   >
                     <div
-                      className="font-bold text-sm px-3 py-2"
                       style={{
-                        backgroundColor: '#e8e8e8',
-                        border: '1px solid #000',
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        background: "#2E4034",
+                        color: "#FFF",
+                        padding: "7px 12px",
+                        borderRadius: "4px 4px 0 0",
+                        fontSize: "12.5px",
+                        fontWeight: 700,
+                        letterSpacing: "0.02em",
                       }}
                     >
-                      KATEGORI: {k.nama.toUpperCase()} ({k.progres.length}{' '}
-                      setoran)
+                      <span>{k.nama.toUpperCase()}</span>
+                      <span style={{ color: "#EBD9B8", fontWeight: 500 }}>
+                        {k.progres.length} setoran
+                      </span>
                     </div>
 
-                    <div
-                      className="text-xs px-3 py-1"
-                      style={{
-                        borderLeft: '1px solid #000',
-                        borderRight: '1px solid #000',
-                      }}
-                    >
-                      {totalLancar > 0 && (
-                        <span className="mr-4">
-                          Kelancaran: {lancar}/{totalLancar} lancar (
-                          {Math.round((lancar / totalLancar) * 100)}%)
-                        </span>
-                      )}
-                      {Object.entries(nilaiCounts).length > 0 && (
-                        <span>
-                          Nilai:{' '}
-                          {Object.entries(nilaiCounts)
-                            .map(
-                              ([kualitas, count]) =>
-                                `${count}× ${
-                                  kualitasLabel[kualitas] ?? kualitas
-                                }`
-                            )
-                            .join(', ')}
-                        </span>
-                      )}
-                    </div>
+                    {(totalLancar > 0 || Object.keys(nilaiCounts).length > 0) && (
+                      <div
+                        style={{
+                          fontSize: "11px",
+                          color: "#4A473C",
+                          padding: "5px 12px",
+                          background: "#F6F3EC",
+                          borderLeft: "1px solid #E4DCC8",
+                          borderRight: "1px solid #E4DCC8",
+                        }}
+                      >
+                        {totalLancar > 0 && (
+                          <span style={{ marginRight: "16px" }}>
+                            Kelancaran {lancar}/{totalLancar} (
+                            {Math.round((lancar / totalLancar) * 100)}%)
+                          </span>
+                        )}
+                        {Object.entries(nilaiCounts).length > 0 && (
+                          <span>
+                            Nilai{" "}
+                            {Object.entries(nilaiCounts)
+                              .map(
+                                ([q, c]) => `${c}× ${kualitasLabel[q] ?? q}`
+                              )
+                              .join(", ")}
+                          </span>
+                        )}
+                      </div>
+                    )}
 
-                    <table
-                      className="w-full text-xs"
-                      style={{ borderCollapse: 'collapse' }}
-                    >
+                    <table className="rpt-tbl rpt-tbl--flush">
                       <thead>
                         <tr>
-                          <th
-                            className="text-left py-1 px-2 w-20"
-                            style={{
-                              border: '1px solid #000',
-                              backgroundColor: '#f0f0f0',
-                            }}
-                          >
-                            Tanggal
-                          </th>
-                          <th
-                            className="text-left py-1 px-2"
-                            style={{
-                              border: '1px solid #000',
-                              backgroundColor: '#f0f0f0',
-                            }}
-                          >
-                            Materi
-                          </th>
-                          <th
-                            className="text-left py-1 px-2 w-24"
-                            style={{
-                              border: '1px solid #000',
-                              backgroundColor: '#f0f0f0',
-                            }}
-                          >
-                            Nilai
-                          </th>
+                          <th style={{ width: "78px" }}>Tanggal</th>
+                          <th>Materi</th>
+                          <th style={{ width: "110px" }}>Nilai</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {k.progres.map((p) => (
-                          <tr key={p.id}>
-                            <td
-                              className="py-1 px-2 align-top"
-                              style={{ border: '1px solid #000' }}
-                            >
-                              {new Date(p.tanggal).toLocaleDateString('id-ID', {
-                                day: 'numeric',
-                                month: 'short',
+                        {k.progres.map((p, idx) => (
+                          <tr
+                            key={p.id}
+                            style={{ background: idx % 2 ? "#FBF9F3" : "#FFF" }}
+                          >
+                            <td style={{ verticalAlign: "top" }}>
+                              {new Date(p.tanggal).toLocaleDateString("id-ID", {
+                                day: "numeric",
+                                month: "short",
                               })}
                             </td>
-                            <td
-                              className="py-1 px-2 align-top"
-                              style={{ border: '1px solid #000' }}
-                            >
+                            <td style={{ verticalAlign: "top" }}>
                               {renderMateri(p, k.customFields)}
                               {p.catatan && (
-                                <div className="italic mt-0.5 text-[10px]">
+                                <div
+                                  style={{
+                                    fontStyle: "italic",
+                                    fontSize: "10.5px",
+                                    marginTop: "2px",
+                                    color: "#4A473C",
+                                  }}
+                                >
                                   {p.catatan}
                                 </div>
                               )}
                             </td>
-                            <td
-                              className="py-1 px-2 align-top"
-                              style={{ border: '1px solid #000' }}
-                            >
+                            <td style={{ verticalAlign: "top" }}>
                               {p.kualitas
                                 ? kualitasLabel[p.kualitas] ?? p.kualitas
-                                : '—'}
+                                : "—"}
                               {p.lancar !== null && (
-                                <div className="text-[10px]">
-                                  {p.lancar ? 'Lancar' : 'Tidak lancar'}
+                                <div style={{ fontSize: "10.5px", color: "#4A473C" }}>
+                                  {p.lancar ? "Lancar" : "Tidak lancar"}
                                 </div>
                               )}
                             </td>
@@ -693,61 +692,196 @@ export default function LaporanClient({
             </div>
           )}
 
-          {/* Footer + TTD Wali Kelas */}
+          {/* ================= TTD WALI KELAS ================= */}
           <div
             style={{
-              marginTop: '40px',
-              display: 'flex',
-              justifyContent: 'flex-end',
-              pageBreakInside: 'avoid',
+              padding: "34px 8px 8px",
+              display: "flex",
+              justifyContent: "flex-end",
+              pageBreakInside: "avoid",
             }}
           >
-            <div style={{ textAlign: 'center', fontSize: '11px' }}>
-              <div style={{ marginBottom: '4px' }}>
+            <div style={{ textAlign: "center", fontSize: "11.5px", minWidth: "200px" }}>
+              <div style={{ marginBottom: "2px", color: "#4A473C" }}>
                 Jakarta, {formatTanggal(new Date().toISOString())}
               </div>
-              {santriData.waliKelas ? (
-                <>
-                  <div style={{ marginBottom: '4px' }}>Wali Kelas Pembimbing,</div>
-                  {santriData.waliKelas.ttd_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={santriData.waliKelas.ttd_url}
-                      alt="TTD"
-                      crossOrigin="anonymous"
-                      style={{
-                        width: '110px',
-                        height: '70px',
-                        objectFit: 'contain',
-                        margin: '4px auto',
-                        display: 'block',
-                      }}
-                    />
-                  ) : (
-                    <div style={{ height: '70px' }} />
-                  )}
-                  <div
-                    style={{
-                      fontWeight: 'bold',
-                      textDecoration: 'underline',
-                      marginTop: '2px',
-                    }}
-                  >
-                    ( {santriData.waliKelas.nama} )
-                  </div>
-                </>
+              <div style={{ marginBottom: "2px" }}>Wali Kelas Pembimbing</div>
+              {santriData.waliKelas?.ttd_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={santriData.waliKelas.ttd_url}
+                  alt="TTD"
+                  crossOrigin="anonymous"
+                  style={{
+                    width: "120px",
+                    height: "68px",
+                    objectFit: "contain",
+                    margin: "4px auto",
+                    display: "block",
+                  }}
+                />
               ) : (
-                <>
-                  <div style={{ marginBottom: '4px' }}>Wali Kelas Pembimbing,</div>
-                  <div style={{ height: '70px' }} />
-                  <div style={{ fontWeight: 'bold' }}>( ................... )</div>
-                </>
+                <div style={{ height: "68px" }} />
               )}
+              <div
+                style={{
+                  fontWeight: 700,
+                  color: "#2E4034",
+                  borderTop: "1px solid #A9803F",
+                  paddingTop: "3px",
+                  display: "inline-block",
+                  minWidth: "160px",
+                }}
+              >
+                {santriData.waliKelas ? santriData.waliKelas.nama : "………………………"}
+              </div>
             </div>
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+// ============================================================
+// Komponen kecil untuk tampilan rapor (redesign)
+// ============================================================
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        fontSize: "10px",
+        letterSpacing: "0.22em",
+        textTransform: "uppercase",
+        color: "#A9803F",
+        fontWeight: 600,
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
+function SectionHead({ no, judul }: { no: string; judul: string }) {
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "20px",
+            height: "20px",
+            borderRadius: "50%",
+            border: "1px solid #A9803F",
+            color: "#A9803F",
+            fontSize: "11px",
+            fontWeight: 700,
+            flexShrink: 0,
+          }}
+        >
+          {no}
+        </span>
+        <span
+          style={{
+            fontSize: "14px",
+            fontWeight: 700,
+            color: "#2E4034",
+            letterSpacing: "0.01em",
+          }}
+        >
+          {judul}
+        </span>
+      </div>
+      <div style={{ height: "1px", background: "#A9803F", opacity: 0.5, marginTop: "6px" }} />
+    </div>
+  )
+}
+
+function DataRow({
+  label,
+  value,
+  bold,
+}: {
+  label: string
+  value: string
+  bold?: boolean
+}) {
+  return (
+    <tr>
+      <td style={{ width: "108px", padding: "2px 0", color: "#4A473C" }}>{label}</td>
+      <td style={{ width: "12px", padding: "2px 0", color: "#9A947F" }}>:</td>
+      <td style={{ padding: "2px 0", fontWeight: bold ? 700 : 400 }}>{value}</td>
+    </tr>
+  )
+}
+
+function Metric({
+  nilai,
+  label,
+  sub,
+  divider,
+}: {
+  nilai: string
+  label: string
+  sub?: string
+  divider?: boolean
+}) {
+  return (
+    <div
+      style={{
+        textAlign: "center",
+        padding: "12px 6px",
+        borderLeft: divider ? "1px solid #E4DCC8" : "none",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "26px",
+          fontWeight: 700,
+          color: "#A9803F",
+          lineHeight: 1,
+        }}
+      >
+        {nilai}
+      </div>
+      <div
+        style={{
+          fontSize: "9.5px",
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          color: "#4A473C",
+          marginTop: "4px",
+        }}
+      >
+        {label}
+      </div>
+      {sub && (
+        <div style={{ fontSize: "9.5px", color: "#9A947F", marginTop: "1px" }}>
+          {sub}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Pill({
+  label,
+  n,
+  tone,
+}: {
+  label: string
+  n: number
+  tone?: "hadir" | "alpha"
+}) {
+  const warna =
+    tone === "hadir" ? "#2E6B4F" : tone === "alpha" ? "#A23B3B" : "#4A473C"
+  return (
+    <span style={{ color: "#4A473C" }}>
+      <span style={{ fontWeight: 700, color: warna, fontSize: "13px" }}>{n}</span>{" "}
+      {label}
+    </span>
   )
 }
 
