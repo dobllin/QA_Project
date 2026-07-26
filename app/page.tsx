@@ -10,11 +10,19 @@ export default async function HomePage() {
 
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('nama, is_super_admin')
-    .eq('id', user.id)
-    .single()
+  // Ambil profile & daftar institusi SEKALIGUS (paralel), bukan satu-satu.
+  // Sebelumnya berurutan sehingga total waktunya = jumlah semua query.
+  const [{ data: profile }, { data: userInst }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('nama, is_super_admin')
+      .eq('id', user.id)
+      .single(),
+    supabase
+      .from('user_institusi')
+      .select('institusi_id')
+      .eq('user_id', user.id),
+  ])
 
   if (!profile) {
     return (
@@ -29,12 +37,6 @@ export default async function HomePage() {
   if (profile.is_super_admin) {
     redirect('/super')
   }
-
-  // Ambil semua assignment user
-  const { data: userInst } = await supabase
-    .from('user_institusi')
-    .select('institusi_id')
-    .eq('user_id', user.id)
 
   if (!userInst || userInst.length === 0) {
     return (

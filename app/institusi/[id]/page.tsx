@@ -34,17 +34,19 @@ export default async function InstitusiOverviewPage({
   } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('is_super_admin')
-    .eq('id', user.id)
-    .single()
-
-  const { data: institusi } = await supabase
-    .from('institusi')
-    .select('id, nama, jenis')
-    .eq('id', institusiId)
-    .single()
+  // Profile & data institusi diambil bersamaan (paralel), bukan berurutan.
+  const [{ data: profile }, { data: institusi }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('is_super_admin')
+      .eq('id', user.id)
+      .single(),
+    supabase
+      .from('institusi')
+      .select('id, nama, jenis')
+      .eq('id', institusiId)
+      .single(),
+  ])
 
   if (!institusi) return null
 

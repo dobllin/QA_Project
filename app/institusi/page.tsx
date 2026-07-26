@@ -23,20 +23,21 @@ export default async function InstitusiPickerPage() {
 
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('nama, is_super_admin')
-    .eq('id', user.id)
-    .single()
+  // Profile & assignments diambil paralel biar tidak nunggu dua kali.
+  const [{ data: profile }, { data: assignments }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('nama, is_super_admin')
+      .eq('id', user.id)
+      .single(),
+    supabase
+      .from('user_institusi')
+      .select('institusi_id, peran, institusi(id, nama, jenis)')
+      .eq('user_id', user.id),
+  ])
 
   if (!profile) redirect('/')
   if (profile.is_super_admin) redirect('/super')
-
-  const { data: assignments } = await supabase
-    .from('user_institusi')
-    .select('institusi_id, peran, institusi(id, nama, jenis)')
-    .eq('user_id', user.id)
-
   if (!assignments || assignments.length === 0) redirect('/')
 
   // Group by institusi_id
