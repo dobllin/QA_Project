@@ -17,6 +17,7 @@
 
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
+import Image from 'next/image'
 
 export default function AppShell({
   sidebar,
@@ -115,7 +116,20 @@ export default function AppShell({
 
       {/* Konten utama */}
       <main className="flex-1 min-w-0 overflow-x-hidden">
-        <div className="max-w-5xl mx-auto px-4 py-6 sm:px-6 lg:px-12 lg:py-12">
+        <div className="relative max-w-5xl mx-auto px-4 py-6 sm:px-6 lg:px-12 lg:py-12">
+          {/* Logo pesantren di pojok kanan atas — muncul di semua halaman.
+              Kecil di HP (biar tidak nabrak judul), lebih besar di desktop. */}
+          <div className="pointer-events-none absolute right-4 top-5 sm:right-6 lg:right-12 lg:top-10 z-10">
+            <Image
+              src="/logo-qa.jpg"
+              alt="Logo Pondok Pesantren Qurrota A'yun"
+              width={80}
+              height={80}
+              priority
+              unoptimized
+              className="w-12 h-12 sm:w-16 sm:h-16 lg:w-20 lg:h-20 object-contain rounded-lg"
+            />
+          </div>
           {children}
         </div>
       </main>
