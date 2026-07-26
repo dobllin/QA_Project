@@ -119,15 +119,15 @@ export default function AppShell({
         <div className="relative max-w-5xl mx-auto px-4 py-6 sm:px-6 lg:px-12 lg:py-12">
           {/* Logo pesantren di pojok kanan atas — muncul di semua halaman.
               Kecil di HP (biar tidak nabrak judul), lebih besar di desktop. */}
-          <div className="pointer-events-none absolute right-4 top-5 sm:right-6 lg:right-12 lg:top-10 z-10">
+          <div className="pointer-events-none absolute right-4 top-4 sm:right-6 sm:top-6 lg:right-12 lg:top-10 z-10">
             <Image
               src="/logo-qa.jpg"
-              alt="Logo Pondok Pesantren Qurrota A'yun"
+              alt="Logo Pondok Pesantren Tahfiz Qurrota A'yun"
               width={80}
               height={80}
               priority
               unoptimized
-              className="w-12 h-12 sm:w-16 sm:h-16 lg:w-20 lg:h-20 object-contain rounded-lg"
+              className="w-10 h-10 sm:w-14 sm:h-14 lg:w-20 lg:h-20 object-contain rounded-lg"
             />
           </div>
           {children}
