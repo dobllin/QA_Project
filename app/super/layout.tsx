@@ -27,6 +27,7 @@ export default async function SuperLayout({
 
   return (
     <AppShell
+      showLogo={false}
       brand={
         <Link href="/super" className="block min-w-0">
           <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-copper-600">

@@ -131,10 +131,18 @@ export async function deleteUser(userId: string) {
   await assertSuperAdmin()
 
   const admin = createAdminClient()
-  const { error } = await admin.auth.admin.deleteUser(userId)
 
+  // Hapus data terkait DULU sebelum akun auth, biar tidak ada baris yatim.
+  // Sebelumnya cuma auth user yang dihapus, sehingga baris di 'profiles'
+  // (yang jadi sumber daftar pengguna) tetap muncul — user terlihat "tidak
+  // hilang" padahal akun loginnya sudah terhapus.
+  await admin.from('user_institusi').delete().eq('user_id', userId)
+  await admin.from('profiles').delete().eq('id', userId)
+
+  const { error } = await admin.auth.admin.deleteUser(userId)
   if (error) return { error: error.message }
 
   revalidatePath('/super/pengguna')
+  revalidatePath('/super')
   return { success: true }
 }
