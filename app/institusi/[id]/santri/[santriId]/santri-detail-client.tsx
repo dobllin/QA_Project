@@ -75,11 +75,20 @@ function getProgresType(kategoriNama: string): ProgresType {
   const lower = kategoriNama.toLowerCase()
   if (lower.includes('kitab')) return 'kitab'
   if (lower.includes('iqro') || lower.includes('iqra')) return 'iqro'
+  // Kategori berbasis Al-Quran -> form Surah + Ayat.
+  // Dicocokkan longgar supaya ejaan "tahfidz" (pakai D), "tahsin",
+  // "murojaah/muroja", "tilawah", dsb semuanya kebaca.
   if (
     lower.includes('tahfiz') ||
+    lower.includes('tahfidz') ||
+    lower.includes('tahsin') ||
     lower.includes('hafalan') ||
     lower.includes('quran') ||
+    lower.includes("qur'an") ||
     lower.includes('surat') ||
+    lower.includes('surah') ||
+    lower.includes('tilawah') ||
+    lower.includes('muroja') ||
     lower.includes('murojaah')
   )
     return 'tahfiz'
@@ -306,7 +315,7 @@ export default function SantriDetailClient({
                         key={p.id}
                         progres={p}
                         progresType={
-                          isAdmin ? 'tahfiz' : getProgresType(activeKategori.nama)
+                          getProgresType(activeKategori.nama)
                         }
                         customFields={activeKategori.customFields ?? []}
                         institusiId={institusiId}
@@ -553,7 +562,7 @@ function ProgresForm({
   // Dicegah dari sini biar user tidak menekan tombol lalu baru ditolak.
   const sudahAda = tanggalTerisi.includes(tanggal)
 
-  const progresType: ProgresType = isAdmin ? 'tahfiz' : getProgresType(kategoriNama)
+  const progresType: ProgresType = getProgresType(kategoriNama)
 
   return (
     <form

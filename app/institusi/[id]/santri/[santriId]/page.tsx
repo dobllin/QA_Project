@@ -153,7 +153,33 @@ export default async function SantriDetailPage({
     .limit(100)
 
   if (!isAdmin) {
-    progressQuery = progressQuery.eq('ustadz_id', user.id)
+    // Ustadz melihat SEMUA riwayat setoran di kategori yang dia ampu
+    // (siapa pun yang menginput), bukan hanya setoran buatannya sendiri.
+    //
+    // Pencocokan pakai NAMA kategori, bukan cuma ID. Alasannya: bisa saja ada
+    // lebih dari satu kategori bernama sama (mis. dua "Tahfidz" hasil input
+    // terpisah) dengan ID berbeda. Kalau hanya cocok ID, setoran yang tercatat
+    // di kategori "Tahfidz" yang lain tidak akan muncul walau namanya sama.
+    // Maka: kumpulkan semua kategori_id di institusi ini yang NAMANYA sama
+    // dengan kategori yang diampu ustadz, lalu tampilkan riwayat dari semuanya.
+    const namaDiampu = new Set(
+      Array.from(kategoriMap.values()).map((k) => k.nama.trim().toLowerCase())
+    )
+
+    const { data: semuaKatInstitusi } = await supabase
+      .from('kategori')
+      .select('id, nama')
+      .eq('institusi_id', institusiId)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const kategoriIdCocok = ((semuaKatInstitusi ?? []) as any[])
+      .filter((k) => namaDiampu.has(String(k.nama).trim().toLowerCase()))
+      .map((k) => Number(k.id))
+
+    progressQuery = progressQuery.in(
+      'kategori_id',
+      kategoriIdCocok.length > 0 ? kategoriIdCocok : [-1]
+    )
   }
 
   const { data: progressHistory } = await progressQuery
