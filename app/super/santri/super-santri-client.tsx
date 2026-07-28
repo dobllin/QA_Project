@@ -110,6 +110,17 @@ export default function SuperSantriClient({
 function InstitusiDashboard({ institusi }: { institusi: InstitusiWithStats }) {
   const { stats } = institusi
   const isPondok = institusi.jenis === 'PONPES'
+  const [cari, setCari] = useState('')
+
+  const q = cari.trim().toLowerCase()
+  const santriTersaring = q
+    ? institusi.santri.filter(
+        (s) =>
+          s.nama.toLowerCase().includes(q) ||
+          (s.kelas ?? '').toLowerCase().includes(q) ||
+          (s.halaqoh ?? '').toLowerCase().includes(q)
+      )
+    : institusi.santri
 
   const avgPoinClass =
     stats.avgPoin >= 100
@@ -184,7 +195,21 @@ function InstitusiDashboard({ institusi }: { institusi: InstitusiWithStats }) {
       <div>
         <div className="text-[10px] font-medium uppercase tracking-widest text-ink-500 mb-3">
           Daftar santri
+          {q && (
+            <span className="text-copper-600"> · {santriTersaring.length} hasil</span>
+          )}
         </div>
+
+        {/* Kotak pencarian santri */}
+        {institusi.santri.length > 0 && (
+          <input
+            type="text"
+            value={cari}
+            onChange={(e) => setCari(e.target.value)}
+            placeholder={`Cari santri di ${institusi.nama}...`}
+            className="w-full px-3 py-2.5 mb-3 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700 focus:bg-cream-50 transition"
+          />
+        )}
 
         {institusi.santri.length === 0 ? (
           <div className="bg-cream-50 border border-line rounded-lg p-6 text-center">
@@ -192,9 +217,16 @@ function InstitusiDashboard({ institusi }: { institusi: InstitusiWithStats }) {
               Belum ada santri terdaftar di institusi ini.
             </p>
           </div>
+        ) : santriTersaring.length === 0 ? (
+          <div className="bg-cream-50 border border-line rounded-lg p-6 text-center">
+            <p className="text-sm text-ink-500">
+              Tidak ada santri cocok dengan{' '}
+              <span className="font-medium">&ldquo;{cari}&rdquo;</span>.
+            </p>
+          </div>
         ) : (
           <div className="grid gap-2">
-            {institusi.santri.map((s) => {
+            {santriTersaring.map((s) => {
               const poin = s.poin ?? 100
               const poinClass =
                 poin >= 100

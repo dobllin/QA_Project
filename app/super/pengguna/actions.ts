@@ -132,17 +132,65 @@ export async function deleteUser(userId: string) {
 
   const admin = createAdminClient()
 
-  // Hapus data terkait DULU sebelum akun auth, biar tidak ada baris yatim.
-  // Sebelumnya cuma auth user yang dihapus, sehingga baris di 'profiles'
-  // (yang jadi sumber daftar pengguna) tetap muncul — user terlihat "tidak
-  // hilang" padahal akun loginnya sudah terhapus.
-  await admin.from('user_institusi').delete().eq('user_id', userId)
-  await admin.from('profiles').delete().eq('id', userId)
+  // Bersihkan SEMUA referensi ke user ini dulu. Kalau tidak, foreign key
+  // di database menolak penghapusan (user pernah jadi pengampu, wali kelas,
+  // atau punya target), dan user jadi terlihat "tidak bisa dihapus".
+  //
+  // Catatan: setoran (progress) & kehadiran yang PERNAH diinput user tetap
+  // dibiarkan — itu milik santri, bukan milik user. Yang dilepas hanya
+  // keterkaitan langsung user <-> data.
 
+  // 1) Lepas jabatan wali kelas di semua santri yang diampunya.
+  await admin
+    .from('santri')
+    .update({ wali_kelas_id: null })
+    .eq('wali_kelas_id', userId)
+
+  // 2) Hapus pengampuan (ustadz_santri).
+  await admin.from('ustadz_santri').delete().eq('ustadz_id', userId)
+
+  // 3) Hapus target ustadz kalau tabelnya ada (diabaikan bila tidak ada).
+  await admin.from('ustadz_target').delete().eq('ustadz_id', userId)
+
+  // 4) Hapus keanggotaan institusi & profil.
+  await admin.from('user_institusi').delete().eq('user_id', userId)
+
+  const { error: profileErr } = await admin
+    .from('profiles')
+    .delete()
+    .eq('id', userId)
+  if (profileErr) {
+    return {
+      error:
+        'Gagal menghapus data pengguna: ' +
+        profileErr.message +
+        '. Kemungkinan user masih terkait data lain.',
+    }
+  }
+
+  // 5) Terakhir, hapus akun loginnya.
   const { error } = await admin.auth.admin.deleteUser(userId)
-  if (error) return { error: error.message }
+  if (error) return { error: 'Gagal hapus akun login: ' + error.message }
 
   revalidatePath('/super/pengguna')
   revalidatePath('/super')
+  return { success: true }
+}
+// ============================================================
+// Ganti password pengguna (oleh super admin)
+// ============================================================
+export async function resetPassword(userId: string, passwordBaru: string) {
+  await assertSuperAdmin()
+
+  if (!passwordBaru || passwordBaru.length < 6) {
+    return { error: 'Password minimal 6 karakter' }
+  }
+
+  const admin = createAdminClient()
+  const { error } = await admin.auth.admin.updateUserById(userId, {
+    password: passwordBaru,
+  })
+
+  if (error) return { error: 'Gagal ganti password: ' + error.message }
   return { success: true }
 }

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { logout } from '../login/actions'
 import NavLink from './nav-link'
 import AppShell from '@/app/components/app-shell'
+import GantiPassword from '@/app/components/ganti-password'
 
 export default async function SuperLayout({
   children,
@@ -27,7 +28,7 @@ export default async function SuperLayout({
 
   return (
     <AppShell
-      showLogo={false}
+      logoPosition="bottom"
       brand={
         <Link href="/super" className="block min-w-0">
           <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-copper-600">
@@ -59,6 +60,7 @@ export default async function SuperLayout({
           </nav>
 
           <div className="p-4 border-t border-line">
+            <GantiPassword />
             <form action={logout}>
               <button
                 type="submit"

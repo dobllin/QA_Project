@@ -178,6 +178,98 @@ export async function assignSantriKategori(
   return { success: true }
 }
 
+// ============================================================
+// Assign BANYAK santri sekaligus ke satu ustadz di satu kategori.
+// Dipakai form "centang banyak santri" biar admin tidak perlu
+// menugaskan satu per satu. Santri yang sudah ter-assign dilewati
+// (tidak dianggap error), sisanya dimasukkan.
+// ============================================================
+export async function assignBanyakSantri(
+  institusiId: number,
+  ustadzId: string,
+  kategoriId: number,
+  santriIds: string[]
+) {
+  await assertInstitusiAdmin(institusiId)
+
+  if (!ustadzId || !kategoriId || !santriIds || santriIds.length === 0) {
+    return { error: 'Pilih ustadz dan minimal satu santri.' }
+  }
+
+  const admin = createAdminClient()
+
+  // Validasi kategori milik institusi ini.
+  const { data: kat } = await admin
+    .from('kategori')
+    .select('id, institusi_id')
+    .eq('id', kategoriId)
+    .single()
+  if (!kat || kat.institusi_id !== institusiId) {
+    return { error: 'Kategori tidak valid' }
+  }
+
+  // Validasi ustadz memang pengajar di institusi ini.
+  const { data: uInst } = await admin
+    .from('user_institusi')
+    .select('id')
+    .eq('user_id', ustadzId)
+    .eq('institusi_id', institusiId)
+    .in('peran', ['ustadz', 'ustadzah'])
+    .maybeSingle()
+  if (!uInst) {
+    return { error: 'Ustadz bukan pengajar di institusi ini' }
+  }
+
+  // Ambil hanya santri yang benar-benar milik institusi ini.
+  const { data: santriValid } = await admin
+    .from('santri')
+    .select('id')
+    .eq('institusi_id', institusiId)
+    .in('id', santriIds)
+  const validIds = (santriValid ?? []).map((x) => String((x as { id: string }).id))
+
+  if (validIds.length === 0) {
+    return { error: 'Tidak ada santri valid yang dipilih.' }
+  }
+
+  // Cek mana yang sudah ter-assign, supaya tidak dobel.
+  const { data: sudah } = await admin
+    .from('ustadz_santri')
+    .select('santri_id')
+    .eq('ustadz_id', ustadzId)
+    .eq('kategori_id', kategoriId)
+    .in('santri_id', validIds)
+  const sudahSet = new Set(
+    (sudah ?? []).map((x) => String((x as { santri_id: string }).santri_id))
+  )
+
+  const barisBaru = validIds
+    .filter((id) => !sudahSet.has(id))
+    .map((id) => ({
+      ustadz_id: ustadzId,
+      santri_id: id,
+      kategori_id: kategoriId,
+    }))
+
+  if (barisBaru.length === 0) {
+    return {
+      success: true,
+      ditambah: 0,
+      pesan: 'Semua santri yang dipilih sudah ter-assign sebelumnya.',
+    }
+  }
+
+  const { error } = await admin.from('ustadz_santri').insert(barisBaru)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/institusi/${institusiId}/kategori`)
+  return {
+    success: true,
+    ditambah: barisBaru.length,
+    dilewati: validIds.length - barisBaru.length,
+  }
+}
+
 export async function unassignFromKategori(
   institusiId: number,
   assignmentId: string

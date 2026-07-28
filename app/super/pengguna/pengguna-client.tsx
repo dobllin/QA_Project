@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import {
+  resetPassword,
   createUser,
   assignToInstitusi,
   removeFromInstitusi,
@@ -40,6 +41,18 @@ export default function PenggunaClient({
 }) {
   const [showForm, setShowForm] = useState(false)
   const [assigningTo, setAssigningTo] = useState<string | null>(null)
+  const [cari, setCari] = useState('')
+
+  // Saring pengguna berdasarkan nama atau email. Berguna buat super admin
+  // menemukan admin/ustadz tertentu tanpa scroll panjang.
+  const q = cari.trim().toLowerCase()
+  const usersTersaring = q
+    ? users.filter(
+        (u) =>
+          u.nama.toLowerCase().includes(q) ||
+          (u.email ?? '').toLowerCase().includes(q)
+      )
+    : users
 
   return (
     <div>
@@ -73,6 +86,24 @@ export default function PenggunaClient({
         />
       )}
 
+      {/* Kotak pencarian pengguna */}
+      {users.length > 0 && (
+        <div className="mb-4">
+          <input
+            type="text"
+            value={cari}
+            onChange={(e) => setCari(e.target.value)}
+            placeholder="Cari nama atau email pengguna..."
+            className="w-full px-3 py-2.5 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700 focus:bg-cream-50 transition"
+          />
+          {q && (
+            <div className="mt-1.5 text-xs text-ink-500">
+              {usersTersaring.length} hasil untuk &ldquo;{cari}&rdquo;
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="space-y-3">
         {users.length === 0 && (
           <div className="bg-cream-50 border border-line rounded-xl p-8 text-center">
@@ -80,7 +111,16 @@ export default function PenggunaClient({
           </div>
         )}
 
-        {users.map((user) => (
+        {users.length > 0 && usersTersaring.length === 0 && (
+          <div className="bg-cream-50 border border-line rounded-xl p-8 text-center">
+            <p className="text-sm text-ink-500">
+              Tidak ada pengguna cocok dengan{' '}
+              <span className="font-medium">&ldquo;{cari}&rdquo;</span>.
+            </p>
+          </div>
+        )}
+
+        {usersTersaring.map((user) => (
           <UserCard
             key={user.id}
             user={user}
@@ -236,6 +276,27 @@ function UserCard({
   onToggleAssign: () => void
 }) {
   const [isPending, startTransition] = useTransition()
+  const [showPw, setShowPw] = useState(false)
+  const [pwBaru, setPwBaru] = useState('')
+  const [pwPending, startPwTransition] = useTransition()
+  const [pwMsg, setPwMsg] = useState<string | null>(null)
+
+  const submitPw = () => {
+    startPwTransition(async () => {
+      setPwMsg(null)
+      const res = await resetPassword(user.id, pwBaru)
+      if (res?.error) {
+        setPwMsg(res.error)
+      } else {
+        setPwMsg('✓ Password berhasil diganti')
+        setPwBaru('')
+        setTimeout(() => {
+          setShowPw(false)
+          setPwMsg(null)
+        }, 1500)
+      }
+    })
+  }
 
   return (
     <div className="bg-cream-50 border border-line rounded-xl p-5">
@@ -251,22 +312,75 @@ function UserCard({
           </div>
           <div className="text-xs text-ink-500">{user.email}</div>
         </div>
-        {!user.is_super_admin && (
+        <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={() => {
-              if (confirm(`Hapus akun ${user.nama}?`)) {
-                startTransition(async () => {
-                  await deleteUser(user.id)
-                })
-              }
+              setShowPw((v) => !v)
+              setPwMsg(null)
+              setPwBaru('')
             }}
-            disabled={isPending}
-            className="text-xs text-error-500 hover:underline disabled:opacity-50"
+            className="text-xs text-forest-700 hover:underline"
           >
-            Hapus
+            {showPw ? 'Tutup' : 'Ganti PW'}
           </button>
-        )}
+          {!user.is_super_admin && (
+            <button
+              onClick={() => {
+                if (confirm(`Hapus akun ${user.nama}?`)) {
+                  startTransition(async () => {
+                    const res = await deleteUser(user.id)
+                    if (res?.error) {
+                      alert(res.error)
+                    }
+                  })
+                }
+              }}
+              disabled={isPending}
+              className="text-xs text-error-500 hover:underline disabled:opacity-50"
+            >
+              {isPending ? '...' : 'Hapus'}
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Form ganti password */}
+      {showPw && (
+        <div className="mb-3 p-3 bg-cream-100 border border-line rounded-lg">
+          <label className="block text-xs font-medium text-ink-700 mb-1.5">
+            Password baru untuk {user.nama}
+          </label>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              value={pwBaru}
+              onChange={(e) => setPwBaru(e.target.value)}
+              placeholder="Minimal 6 karakter"
+              className="flex-1 px-3 py-2 bg-cream-50 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+            />
+            <button
+              onClick={submitPw}
+              disabled={pwPending || pwBaru.length < 6}
+              className="bg-forest-700 hover:bg-forest-800 disabled:opacity-40 text-cream-50 text-sm font-medium px-4 py-2 rounded-lg transition shrink-0"
+            >
+              {pwPending ? 'Menyimpan...' : 'Simpan'}
+            </button>
+          </div>
+          <p className="text-[11px] text-ink-400 mt-1.5">
+            Password ditampilkan terang biar mudah dicatat. Beri tahu pemilik
+            akun password barunya.
+          </p>
+          {pwMsg && (
+            <div
+              className={`mt-2 text-xs ${
+                pwMsg.startsWith('✓') ? 'text-success-500' : 'text-error-500'
+              }`}
+            >
+              {pwMsg}
+            </div>
+          )}
+        </div>
+      )}
 
       {user.assignments.length > 0 && (
         <div className="mt-4 pt-4 border-t border-line/60">

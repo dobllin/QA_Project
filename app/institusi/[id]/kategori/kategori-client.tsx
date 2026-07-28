@@ -1,11 +1,14 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
+
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import {
   createKategori,
   deleteKategori,
   assignSantriKategori,
+  assignBanyakSantri,
   unassignFromKategori,
   updateKategoriFields,
   type CustomField,
@@ -169,6 +172,7 @@ function TambahKategoriPanel({
   existingNames: string[]
 }) {
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [inputValue, setInputValue] = useState('')
@@ -185,7 +189,7 @@ function TambahKategoriPanel({
       } else {
         setSuccess(`Kategori "${nama}" berhasil ditambahkan`)
         setInputValue('')
-        setTimeout(() => window.location.reload(), 600)
+        router.refresh()
       }
     })
   }
@@ -283,6 +287,7 @@ function KategoriDetail({
   onDeleted: () => void
 }) {
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
 
   const handleDelete = () => {
@@ -300,7 +305,7 @@ function KategoriDetail({
         setError(result.error)
       } else {
         onDeleted()
-        setTimeout(() => window.location.reload(), 300)
+        router.refresh()
       }
     })
   }
@@ -385,28 +390,79 @@ function AssignForm({
   santriList: Santri[]
 }) {
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
+  const [sukses, setSukses] = useState<string | null>(null)
   const [ustadzId, setUstadzId] = useState('')
-  const [santriId, setSantriId] = useState('')
+  const [cari, setCari] = useState('')
+  // kumpulan id santri yang dicentang
+  const [dipilih, setDipilih] = useState<Set<string>>(new Set())
+
+  const toggle = (id: string) => {
+    setDipilih((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const santriTersaring = santriList.filter((s) => {
+    const q = cari.trim().toLowerCase()
+    if (!q) return true
+    return (
+      s.nama.toLowerCase().includes(q) ||
+      (s.kelas ?? '').toLowerCase().includes(q)
+    )
+  })
+
+  const semuaTersaringDipilih =
+    santriTersaring.length > 0 &&
+    santriTersaring.every((s) => dipilih.has(s.id))
+
+  const toggleSemuaTersaring = () => {
+    setDipilih((prev) => {
+      const next = new Set(prev)
+      if (semuaTersaringDipilih) {
+        santriTersaring.forEach((s) => next.delete(s.id))
+      } else {
+        santriTersaring.forEach((s) => next.add(s.id))
+      }
+      return next
+    })
+  }
 
   const submit = () => {
-    if (!ustadzId || !santriId) {
-      setError('Pilih ustadz dan santri dulu')
+    setError(null)
+    setSukses(null)
+    if (!ustadzId) {
+      setError('Pilih pengampu dulu.')
+      return
+    }
+    if (dipilih.size === 0) {
+      setError('Centang minimal satu santri.')
       return
     }
     startTransition(async () => {
-      setError(null)
-      const fd = new FormData()
-      fd.append('ustadz_id', ustadzId)
-      fd.append('santri_id', santriId)
-      fd.append('kategori_id', String(kategoriId))
-      const result = await assignSantriKategori(institusiId, fd)
-      if (result?.error) {
-        setError(result.error)
+      const res = await assignBanyakSantri(
+        institusiId,
+        ustadzId,
+        kategoriId,
+        Array.from(dipilih)
+      )
+      if (res?.error) {
+        setError(res.error)
       } else {
-        setUstadzId('')
-        setSantriId('')
-        setTimeout(() => window.location.reload(), 300)
+        const n = res?.ditambah ?? 0
+        const lewat = res?.dilewati ?? 0
+        setSukses(
+          `${n} santri ditugaskan` +
+            (lewat > 0 ? `, ${lewat} sudah ada sebelumnya` : '') +
+            '.'
+        )
+        setDipilih(new Set())
+        setCari('')
+        router.refresh()
       }
     })
   }
@@ -416,48 +472,104 @@ function AssignForm({
       <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-copper-600 mb-3">
         Tambah penugasan
       </div>
-      <div className="grid sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
-        <div>
-          <label className="block text-xs font-medium text-ink-700 mb-1.5">
-            Ustadz / Ustadzah
+
+      {/* Pilih pengampu */}
+      <div className="mb-3">
+        <label className="block text-xs font-medium text-ink-700 mb-1.5">
+          Ustadz / Ustadzah
+        </label>
+        <select
+          value={ustadzId}
+          onChange={(e) => setUstadzId(e.target.value)}
+          className="w-full sm:max-w-sm px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+        >
+          <option value="">— Pilih pengampu —</option>
+          {ustadzList.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.nama} ({u.peran})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Pilih banyak santri */}
+      <div>
+        <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+          <label className="text-xs font-medium text-ink-700">
+            Santri{' '}
+            {dipilih.size > 0 && (
+              <span className="text-copper-600">({dipilih.size} dipilih)</span>
+            )}
           </label>
-          <select
-            value={ustadzId}
-            onChange={(e) => setUstadzId(e.target.value)}
-            className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
-          >
-            <option value="">— Pilih pengampu —</option>
-            {ustadzList.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.nama} ({u.peran})
-              </option>
-            ))}
-          </select>
+          {santriTersaring.length > 0 && (
+            <button
+              type="button"
+              onClick={toggleSemuaTersaring}
+              className="text-xs text-forest-700 hover:underline"
+            >
+              {semuaTersaringDipilih ? 'Batalkan semua' : 'Pilih semua'}
+              {cari.trim() ? ' (hasil cari)' : ''}
+            </button>
+          )}
         </div>
-        <div>
-          <label className="block text-xs font-medium text-ink-700 mb-1.5">
-            Santri
-          </label>
-          <select
-            value={santriId}
-            onChange={(e) => setSantriId(e.target.value)}
-            className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
-          >
-            <option value="">— Pilih santri —</option>
-            {santriList.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nama}
-                {s.kelas ? ` · ${s.kelas}` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
+
+        <input
+          type="text"
+          value={cari}
+          onChange={(e) => setCari(e.target.value)}
+          placeholder="Cari nama / kelas santri..."
+          className="w-full px-3 py-2 mb-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+        />
+
+        {santriList.length === 0 ? (
+          <div className="text-xs text-ink-500 py-2">
+            Belum ada santri. Tambah dulu di menu Semua santri.
+          </div>
+        ) : (
+          <div className="max-h-64 overflow-y-auto border border-line rounded-lg divide-y divide-line/60 bg-cream-100">
+            {santriTersaring.length === 0 ? (
+              <div className="text-xs text-ink-400 italic p-3">
+                Tidak ada santri cocok dengan pencarian.
+              </div>
+            ) : (
+              santriTersaring.map((s) => {
+                const checked = dipilih.has(s.id)
+                return (
+                  <label
+                    key={s.id}
+                    className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition ${
+                      checked ? 'bg-forest-700/10' : 'hover:bg-cream-200/50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggle(s.id)}
+                      className="w-4 h-4 accent-forest-700 shrink-0"
+                    />
+                    <span className="text-sm text-ink-800">
+                      {s.nama}
+                      {s.kelas && (
+                        <span className="text-ink-400"> · {s.kelas}</span>
+                      )}
+                    </span>
+                  </label>
+                )
+              })
+            )}
+          </div>
+        )}
+
         <button
           onClick={submit}
-          disabled={isPending || !ustadzId || !santriId}
-          className="bg-forest-700 hover:bg-forest-800 disabled:opacity-50 text-cream-50 text-sm font-medium px-5 py-2 rounded-lg transition h-fit"
+          disabled={isPending || !ustadzId || dipilih.size === 0}
+          className="mt-3 bg-forest-700 hover:bg-forest-800 disabled:opacity-50 text-cream-50 text-sm font-medium px-5 py-2 rounded-lg transition"
         >
-          {isPending ? '...' : 'Tugaskan'}
+          {isPending
+            ? 'Menugaskan...'
+            : dipilih.size > 0
+            ? `Tugaskan ${dipilih.size} santri`
+            : 'Tugaskan'}
         </button>
       </div>
 
@@ -467,15 +579,15 @@ function AssignForm({
           Admin.
         </div>
       )}
-      {santriList.length === 0 && (
-        <div className="mt-3 text-xs text-ink-500">
-          Belum ada santri. Tambah dulu di menu Semua santri.
-        </div>
-      )}
 
       {error && (
         <div className="mt-3 p-3 bg-error-50 border border-error-500/30 rounded-lg text-sm text-error-500">
           {error}
+        </div>
+      )}
+      {sukses && (
+        <div className="mt-3 p-3 bg-success-500/10 border border-success-500/30 rounded-lg text-sm text-success-500">
+          {sukses}
         </div>
       )}
     </div>
@@ -496,6 +608,7 @@ function UstadzCard({
   santriList: Santri[]
 }) {
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [santriId, setSantriId] = useState('')
@@ -513,7 +626,7 @@ function UstadzCard({
       if (result?.error) {
         setError(result.error)
       } else {
-        setTimeout(() => window.location.reload(), 300)
+        router.refresh()
       }
     })
   }
@@ -532,7 +645,7 @@ function UstadzCard({
       } else {
         setSantriId('')
         setShowAdd(false)
-        setTimeout(() => window.location.reload(), 300)
+        router.refresh()
       }
     })
   }

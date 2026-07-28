@@ -33,6 +33,17 @@ export default function AdminOverviewClient({
   institusiId: number
 }) {
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [cari, setCari] = useState('')
+
+  const q = cari.trim().toLowerCase()
+  const santriTersaring = q
+    ? santriList.filter(
+        (s) =>
+          s.nama.toLowerCase().includes(q) ||
+          (s.kelas ?? '').toLowerCase().includes(q) ||
+          (s.halaqoh ?? '').toLowerCase().includes(q)
+      )
+    : santriList
 
   return (
     <div>
@@ -71,15 +82,31 @@ export default function AdminOverviewClient({
       </div>
 
       <div>
-        <div className="mb-6">
+        <div className="mb-4">
           <h2 className="font-display text-2xl text-forest-800 mb-1">
             Santri terdaftar
+            {q && (
+              <span className="text-base font-normal text-copper-600">
+                {' '}· {santriTersaring.length} hasil
+              </span>
+            )}
           </h2>
           <p className="text-sm text-ink-500">
             Klik nama untuk edit atau hapus. Badge menunjukkan status setoran
             hari ini.
           </p>
         </div>
+
+        {/* Kotak pencarian santri */}
+        {santriList.length > 0 && (
+          <input
+            type="text"
+            value={cari}
+            onChange={(e) => setCari(e.target.value)}
+            placeholder="Cari nama, kelas, atau halaqoh santri..."
+            className="w-full px-3 py-2.5 mb-4 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700 focus:bg-cream-50 transition"
+          />
+        )}
 
         {santriList.length === 0 ? (
           <div className="bg-cream-50 border border-line rounded-xl p-8 text-center">
@@ -89,9 +116,16 @@ export default function AdminOverviewClient({
               di samping.
             </p>
           </div>
+        ) : santriTersaring.length === 0 ? (
+          <div className="bg-cream-50 border border-line rounded-xl p-8 text-center">
+            <p className="text-sm text-ink-500">
+              Tidak ada santri cocok dengan{' '}
+              <span className="font-medium">&ldquo;{cari}&rdquo;</span>.
+            </p>
+          </div>
         ) : (
           <div className="space-y-2">
-            {santriList.map((s) =>
+            {santriTersaring.map((s) =>
               editingId === s.id ? (
                 <SantriEditRow
                   key={s.id}

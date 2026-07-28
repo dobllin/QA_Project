@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { logout } from '../../login/actions'
 import AppShell from '@/app/components/app-shell'
+import GantiPassword from '@/app/components/ganti-password'
 
 const peranLabel: Record<string, string> = {
   ustadz: 'Ustadz',
@@ -149,6 +150,7 @@ export default async function InstitusiLayout({
                   : 'Pilih institusi lain'}
               </Link>
             )}
+            <GantiPassword />
             <form action={logout}>
               <button
                 type="submit"

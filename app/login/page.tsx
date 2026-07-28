@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { login } from './actions'
 
 export default async function LoginPage({
@@ -7,6 +8,7 @@ export default async function LoginPage({
 }) {
   const params = await searchParams
   const error = params.error
+  const resetOk = (params as { reset?: string }).reset === 'ok'
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
@@ -23,6 +25,11 @@ export default async function LoginPage({
         <div className="divider-double mb-8" />
 
         <div className="bg-cream-50 border border-line rounded-2xl p-7">
+          {resetOk && (
+            <div className="mb-5 p-3 bg-success-500/10 border border-success-500/30 rounded-lg text-sm text-success-500">
+              Password berhasil diubah. Silakan login dengan password baru.
+            </div>
+          )}
           {error && (
             <div className="mb-5 p-3 bg-error-50 border border-error-500/30 rounded-lg text-sm text-error-500">
               {decodeURIComponent(error)}
@@ -65,6 +72,15 @@ export default async function LoginPage({
               Masuk
             </button>
           </form>
+
+          <div className="mt-4 text-center">
+            <Link
+              href="/login/lupa"
+              className="text-xs text-forest-700 hover:underline"
+            >
+              Lupa password?
+            </Link>
+          </div>
         </div>
 
         <p className="text-center text-xs text-ink-500 mt-6">

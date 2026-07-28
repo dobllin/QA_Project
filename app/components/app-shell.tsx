@@ -23,14 +23,16 @@ export default function AppShell({
   sidebar,
   brand,
   children,
-  showLogo = true,
+  logoPosition = 'top',
 }: {
   sidebar: React.ReactNode
   brand: React.ReactNode
   children: React.ReactNode
-  // Logo pojok kanan atas. Dimatikan di halaman yang punya tombol di kanan
-  // atas (mis. super admin) supaya tidak tabrakan.
-  showLogo?: boolean
+  // Posisi logo pojok kanan.
+  //  'top'    : sejajar header (default, dipakai halaman institusi)
+  //  'bottom' : agak turun ke bawah, dipakai halaman yang tombolnya di kanan
+  //             atas (mis. super admin) supaya logo tidak menutup tombol.
+  logoPosition?: 'top' | 'bottom'
 }) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
@@ -121,21 +123,26 @@ export default function AppShell({
       {/* Konten utama */}
       <main className="flex-1 min-w-0 overflow-x-hidden">
         <div className="relative max-w-5xl mx-auto px-4 py-6 sm:px-6 lg:px-12 lg:py-12">
-          {/* Logo pesantren di pojok kanan atas. showLogo=false di halaman
-              yang tombolnya ada di kanan atas (super admin) biar tidak tabrakan. */}
-          {showLogo && (
-            <div className="pointer-events-none absolute right-4 top-4 sm:right-6 sm:top-6 lg:right-12 lg:top-10 z-10">
-              <Image
-                src="/logo-qa.jpg"
-                alt="Logo Pondok Pesantren Tahfiz Qurrota A'yun"
-                width={80}
-                height={80}
-                priority
-                unoptimized
-                className="w-10 h-10 sm:w-14 sm:h-14 lg:w-20 lg:h-20 object-contain rounded-lg"
-              />
-            </div>
-          )}
+          {/* Logo pesantren di pojok kanan. Selalu tampil; posisinya yang
+              beda: 'top' sejajar header, 'bottom' turun ke bawah tombol. */}
+          <div
+            className={[
+              'pointer-events-none absolute z-10 right-4 sm:right-6 lg:right-12',
+              logoPosition === 'bottom'
+                ? 'top-24 sm:top-24 lg:top-28'
+                : 'top-4 sm:top-6 lg:top-10',
+            ].join(' ')}
+          >
+            <Image
+              src="/logo-qa.jpg"
+              alt="Logo Pondok Pesantren Tahfiz Qurrota A'yun"
+              width={80}
+              height={80}
+              priority
+              unoptimized
+              className="w-10 h-10 sm:w-14 sm:h-14 lg:w-20 lg:h-20 object-contain rounded-lg"
+            />
+          </div>
           {children}
         </div>
       </main>
