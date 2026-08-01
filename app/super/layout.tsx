@@ -57,6 +57,7 @@ export default async function SuperLayout({
             <NavLink href="/super/santri">Semua santri</NavLink>
             <NavLink href="/super/pengguna">Pengguna</NavLink>
             <NavLink href="/super/institusi">Institusi</NavLink>
+            <NavLink href="/super/perangkat">Perangkat ajar</NavLink>
           </nav>
 
           <div className="p-4 border-t border-line">
