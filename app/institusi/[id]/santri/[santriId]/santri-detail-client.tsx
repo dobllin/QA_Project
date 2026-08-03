@@ -71,6 +71,21 @@ type PoinLogEntry = {
 
 type ProgresType = 'tahfiz' | 'kitab' | 'iqro' | 'other'
 
+// Di institusi Pondok, field Nilai & Kelancaran DIHAPUS dari form untuk
+// semua kategori KECUALI kategori setoran hafalan mingguan: Tahfiz, Murojaah,
+// Ziyadah. Fungsi ini menandai kategori yang dikecualikan (tetap pakai
+// Nilai+Kelancaran). Dicocokkan longgar supaya ejaan bebas tetap kebaca.
+function kategoriPakaiNilaiKelancaran(kategoriNama: string): boolean {
+  const l = kategoriNama.toLowerCase()
+  return (
+    l.includes('tahfiz') ||
+    l.includes('tahfidz') ||
+    l.includes('muroja') ||   // murojaah / muraja'ah
+    l.includes('ziyadah') ||
+    l.includes('ziadah')      // jaga-jaga ejaan alternatif
+  )
+}
+
 function getProgresType(kategoriNama: string): ProgresType {
   const lower = kategoriNama.toLowerCase()
   if (lower.includes('kitab')) return 'kitab'
@@ -186,6 +201,44 @@ export default function SantriDetailClient({
     (p) => p.kategori_id === activeKategoriId
   )
 
+  // ====== CAPAIAN HAFALAN (khusus kategori tahfiz) ======
+  // Dihitung dari setoran "hafalan baru" saja (murojaah tidak dihitung).
+  // Total ayat per setoran = ayat_selesai - ayat_mulai + 1 (kalau valid).
+  // Rentang: pekan ini, semester ini (6 bulan terakhir), dan akumulasi semua.
+  const isTahfizKategori =
+    activeKategori != null &&
+    getProgresType(activeKategori.nama) === 'tahfiz'
+
+  function hitungCapaian(sejak: Date | null) {
+    let setoran = 0
+    let ayat = 0
+    for (const p of filteredHistory) {
+      // hanya hafalan baru
+      if (p.jenis_setoran !== 'hafalan_baru') continue
+      if (sejak) {
+        const t = p.tanggal ? new Date(p.tanggal) : null
+        if (!t || t < sejak) continue
+      }
+      setoran += 1
+      const a1 = Number(p.ayat_mulai)
+      const a2 = Number(p.ayat_selesai)
+      if (Number.isFinite(a1) && Number.isFinite(a2) && a2 >= a1) {
+        ayat += a2 - a1 + 1
+      }
+    }
+    return { setoran, ayat }
+  }
+
+  const now = new Date()
+  const awalPekan = new Date(now)
+  awalPekan.setDate(now.getDate() - 7)
+  const awalSemester = new Date(now)
+  awalSemester.setMonth(now.getMonth() - 6)
+
+  const capaianPekan = hitungCapaian(awalPekan)
+  const capaianSemester = hitungCapaian(awalSemester)
+  const capaianTotal = hitungCapaian(null)
+
   const details = [
     santri.kelas && { label: 'Kelas', value: santri.kelas },
     santri.halaqoh && { label: 'Halaqoh', value: santri.halaqoh },
@@ -291,12 +344,63 @@ export default function SantriDetailClient({
                     customFields={activeKategori.customFields ?? []}
                     institusiId={institusiId}
                     isAdmin={isAdmin}
+                    isPondok={isPondok}
                     tanggalTerisi={filteredHistory.map(
                       (p) => p.tanggal.split('T')[0]
                     )}
                   />
                 )}
               </div>
+
+              {/* Panel capaian hafalan — hanya untuk kategori tahfiz */}
+              {isTahfizKategori && (
+                <div className="mb-8">
+                  <h2 className="font-display text-2xl text-forest-800 mb-1">
+                    Capaian hafalan
+                  </h2>
+                  <p className="text-xs text-ink-500 mb-4">
+                    Dihitung dari setoran hafalan baru (murojaah tidak dihitung).
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="bg-cream-50 border border-line rounded-xl p-4">
+                      <div className="text-[10px] font-medium uppercase tracking-widest text-copper-600 mb-2">
+                        Pekan ini
+                      </div>
+                      <div className="font-display text-3xl text-forest-800">
+                        {capaianPekan.ayat}
+                        <span className="text-base text-ink-400"> ayat</span>
+                      </div>
+                      <div className="text-xs text-ink-500 mt-1">
+                        {capaianPekan.setoran}x setoran
+                      </div>
+                    </div>
+                    <div className="bg-cream-50 border border-line rounded-xl p-4">
+                      <div className="text-[10px] font-medium uppercase tracking-widest text-copper-600 mb-2">
+                        Semester ini (6 bln)
+                      </div>
+                      <div className="font-display text-3xl text-forest-800">
+                        {capaianSemester.ayat}
+                        <span className="text-base text-ink-400"> ayat</span>
+                      </div>
+                      <div className="text-xs text-ink-500 mt-1">
+                        {capaianSemester.setoran}x setoran
+                      </div>
+                    </div>
+                    <div className="bg-forest-700/10 border border-forest-700/30 rounded-xl p-4">
+                      <div className="text-[10px] font-medium uppercase tracking-widest text-forest-700 mb-2">
+                        Akumulasi total
+                      </div>
+                      <div className="font-display text-3xl text-forest-800">
+                        {capaianTotal.ayat}
+                        <span className="text-base text-ink-400"> ayat</span>
+                      </div>
+                      <div className="text-xs text-ink-500 mt-1">
+                        {capaianTotal.setoran}x setoran
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <h2 className="font-display text-2xl text-forest-800 mb-4">
@@ -538,6 +642,7 @@ function ProgresForm({
   santriId,
   kategoriId,
   kategoriNama,
+  isPondok,
   customFields,
   institusiId,
   isAdmin,
@@ -546,6 +651,7 @@ function ProgresForm({
   santriId: string
   kategoriId: number
   kategoriNama: string
+  isPondok: boolean
   customFields: CustomField[]
   institusiId: number
   isAdmin: boolean
@@ -563,6 +669,10 @@ function ProgresForm({
   const sudahAda = tanggalTerisi.includes(tanggal)
 
   const progresType: ProgresType = getProgresType(kategoriNama)
+  // Di Pondok, sembunyikan Nilai & Kelancaran KECUALI untuk kategori
+  // Tahfiz/Murojaah/Ziyadah. Di RA & TPQ tidak berubah (tetap tampil).
+  const sembunyikanNilaiKelancaran =
+    isPondok && !kategoriPakaiNilaiKelancaran(kategoriNama)
 
   return (
     <form
@@ -837,7 +947,7 @@ function ProgresForm({
         </div>
       )}
 
-      {progresType !== 'kitab' && (
+      {progresType !== 'kitab' && !sembunyikanNilaiKelancaran && (
         <div>
           <label className="block text-xs font-medium text-ink-700 mb-2">
             Kelancaran
@@ -864,6 +974,7 @@ function ProgresForm({
         </div>
       )}
 
+      {!sembunyikanNilaiKelancaran && (
       <div>
         <label className="block text-xs font-medium text-ink-700 mb-2">
           Nilai
@@ -885,6 +996,7 @@ function ProgresForm({
           ))}
         </div>
       </div>
+      )}
 
       {/* CUSTOM FIELDS dari admin */}
       {customFields.length > 0 && (

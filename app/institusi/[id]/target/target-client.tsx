@@ -1,5 +1,7 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
+
 // ============================================================
 // FILE: app/institusi/[id]/target/target-client.tsx
 // ============================================================
@@ -195,6 +197,7 @@ function TargetForm({
   onDone: () => void
 }) {
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
 
   const today = new Date().toISOString().slice(0, 10)
@@ -219,7 +222,7 @@ function TargetForm({
             if (result?.error) setError(result.error)
             else {
               onDone()
-              setTimeout(() => window.location.reload(), 300)
+              router.refresh()
             }
           })
         }}
@@ -372,6 +375,7 @@ function TargetCard({
   currentUserId: string
 }) {
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
 
   const percent = target.targetValue > 0
@@ -384,6 +388,17 @@ function TargetCard({
   const today = new Date().toISOString().slice(0, 10)
   const daysRemaining = daysBetween(today, target.targetSelesai)
   const isOverdue = today > target.targetSelesai && target.status === 'aktif'
+  // Tercapai kalau progress >= target.
+  const tercapai = target.progressValue >= target.targetValue
+  // Tidak tercapai = sudah lewat deadline tapi belum memenuhi target.
+  const tidakTercapai = isOverdue && !tercapai
+  // Warning mendekati deadline: masih aktif, belum tercapai, sisa <= 2 hari.
+  const mendekatiDeadline =
+    target.status === 'aktif' &&
+    !tercapai &&
+    !isOverdue &&
+    daysRemaining >= 0 &&
+    daysRemaining <= 2
 
   const barColor =
     target.status === 'selesai'
@@ -405,12 +420,20 @@ function TargetCard({
       setError(null)
       const result = await fn()
       if (result?.error) setError(result.error)
-      else setTimeout(() => window.location.reload(), 300)
+      else router.refresh()
     })
   }
 
   return (
-    <div className="bg-cream-50 border border-line rounded-xl p-5">
+    <div
+      className={`rounded-xl p-5 border ${
+        tidakTercapai
+          ? 'bg-error-50/40 border-error-500/40'
+          : mendekatiDeadline
+          ? 'bg-copper-500/5 border-copper-500/40'
+          : 'bg-cream-50 border-line'
+      }`}
+    >
       <div className="flex items-start justify-between gap-4 mb-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -420,9 +443,19 @@ function TargetCard({
             <span className="text-[10px] text-ink-500">
               {target.ustadzNama}
             </span>
-            {isOverdue && (
+            {tidakTercapai && (
               <span className="text-[10px] font-medium uppercase tracking-wider text-error-500 bg-error-500/10 border border-error-500/30 rounded px-1.5 py-0.5">
-                Lewat deadline
+                Tidak tercapai
+              </span>
+            )}
+            {mendekatiDeadline && (
+              <span className="text-[10px] font-medium uppercase tracking-wider text-copper-600 bg-copper-500/10 border border-copper-500/30 rounded px-1.5 py-0.5">
+                {daysRemaining === 0 ? 'Deadline hari ini!' : `Sisa ${daysRemaining} hari`}
+              </span>
+            )}
+            {tercapai && target.status === 'aktif' && (
+              <span className="text-[10px] font-medium uppercase tracking-wider text-success-500 bg-success-500/10 border border-success-500/30 rounded px-1.5 py-0.5">
+                Tercapai
               </span>
             )}
           </div>
@@ -534,6 +567,22 @@ function TargetCard({
           <span>Sisa {daysRemaining} hari</span>
         )}
       </div>
+
+      {tidakTercapai && (
+        <div className="mt-3 p-2.5 bg-error-500/10 border border-error-500/30 rounded-lg text-xs text-error-500 font-medium">
+          Tidak tercapai target mingguan — baru {target.progressValue} dari{' '}
+          {target.targetValue} {unitLabel[target.unitType]} sampai batas waktu.
+        </div>
+      )}
+      {mendekatiDeadline && (
+        <div className="mt-3 p-2.5 bg-copper-500/10 border border-copper-500/30 rounded-lg text-xs text-copper-700">
+          {daysRemaining === 0
+            ? 'Deadline hari ini! '
+            : `Tinggal ${daysRemaining} hari lagi. `}
+          Kurang {target.targetValue - target.progressValue}{' '}
+          {unitLabel[target.unitType]} lagi untuk mencapai target.
+        </div>
+      )}
 
       {error && (
         <div className="mt-3 p-2 bg-error-50 border border-error-500/30 rounded-lg text-xs text-error-500">
