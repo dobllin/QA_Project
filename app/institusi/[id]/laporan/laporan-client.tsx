@@ -180,12 +180,12 @@ export default function LaporanClient({
       const fileName = `Laporan-${santriData.santri.nama}-${currentBulan}.pdf`
       // html2pdf menerima 'pagebreak' saat runtime; tipe bawaannya belum mencakup itu.
       const pdfOpt: any = {
-          margin: [10, 10, 10, 10],
+          margin: [12, 10, 16, 10],
           filename: fileName,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+          pagebreak: { mode: ['css', 'legacy'] },
         }
       await html2pdf()
         .set(pdfOpt)

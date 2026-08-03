@@ -141,14 +141,19 @@ export default function LaporanMingguanClient({
       const html2pdf = (await import('html2pdf.js')).default
       // html2pdf menerima 'pagebreak' saat runtime; tipe bawaannya belum mencakup itu.
       const pdfOpt: any = {
-          margin: [10, 10, 10, 10],
+          // margin: [atas, kiri, bawah, kanan] dalam mm. Bawah diperbesar
+          // jadi 16mm supaya tanda tangan & tanggal tidak mepet/terpotong
+          // di tepi bawah halaman.
+          margin: [12, 10, 16, 10],
           filename: `Laporan-Mingguan-${amanUntukNamaFile(
             ustadzNama
           )}-${currentMinggu}.pdf`,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+          // 'css' + 'legacy' menghormati pageBreakInside:avoid pada blok TTD
+          // tanpa memaksa seluruh elemen dipisah (yang bikin konten ke tepi).
+          pagebreak: { mode: ['css', 'legacy'] },
         }
       await html2pdf()
         .set(pdfOpt)
@@ -616,16 +621,27 @@ export default function LaporanMingguanClient({
                     </div>
                   ))}
 
-                  {/* TTD pengampu (blok Pimpinan Lembaga dihapus sesuai permintaan) */}
+                  {/* TTD pengampu. Dibungkus kuat agar tidak terpotong di
+                      batas halaman PDF: pageBreakInside avoid + breakInside
+                      avoid + padding bawah sebagai ruang aman. */}
                   <div
                     style={{
-                      marginTop: '32px',
+                      marginTop: '24px',
+                      paddingBottom: '24px',
                       display: 'flex',
                       justifyContent: 'flex-end',
                       pageBreakInside: 'avoid',
+                      breakInside: 'avoid',
                     }}
                   >
-                    <div style={{ textAlign: 'center', fontSize: '11px' }}>
+                    <div
+                      style={{
+                        textAlign: 'center',
+                        fontSize: '11px',
+                        pageBreakInside: 'avoid',
+                        breakInside: 'avoid',
+                      }}
+                    >
                       <div style={{ marginBottom: '4px' }}>
                         Jakarta, {formatTanggal(periodeEnd)}
                       </div>
