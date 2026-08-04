@@ -63,6 +63,7 @@ export default async function TargetPage({
     { data: institusi },
     { data: kategoriList },
     { data: userInsts },
+    { data: santriRows },
     { data: targets },
   ] = await Promise.all([
     supabase
@@ -80,6 +81,11 @@ export default async function TargetPage({
       .select('user_id, peran, profiles:user_id(id, nama)')
       .eq('institusi_id', institusiId)
       .in('peran', ['ustadz', 'ustadzah']),
+    supabase
+      .from('santri')
+      .select('id, nama, kelas, halaqoh')
+      .eq('institusi_id', institusiId)
+      .order('nama'),
     (isAdmin
       ? supabase
           .from('ustadz_target')
@@ -113,21 +119,38 @@ export default async function TargetPage({
   // Hitung progress otomatis per target
   const ustadzNameMap = new Map(ustadzList.map((u) => [u.id, u.nama]))
   const kategoriNameMap = new Map((kategoriList ?? []).map((k) => [k.id, k.nama]))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const santriList = ((santriRows ?? []) as any[]).map((s) => ({
+    id: s.id as string,
+    nama: s.nama as string,
+    kelas: (s.kelas ?? null) as string | null,
+    halaqoh: (s.halaqoh ?? null) as string | null,
+  }))
+  const santriNameMap = new Map(santriList.map((s) => [s.id, s.nama]))
 
   const enrichedTargets = await Promise.all(
     (targets ?? []).map(async (t) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const target = t as any
 
-      const { data: progresRows } = await supabase
+      let progresQuery = supabase
         .from('progress')
         .select(
           'ayat_mulai, ayat_selesai, halaman_mulai, halaman_selesai, iqro_halaman'
         )
-        .eq('ustadz_id', target.ustadz_id)
         .eq('kategori_id', target.kategori_id)
         .gte('tanggal', target.target_mulai)
         .lte('tanggal', target.target_selesai)
+
+      // Kalau target punya santri, hitung progress dari setoran SANTRI itu
+      // (siapa pun yang input). Kalau tidak (target lama tanpa santri),
+      // pakai perilaku lama: setoran oleh ustadz tsb.
+      if (target.santri_id) {
+        progresQuery = progresQuery.eq('santri_id', target.santri_id)
+      } else {
+        progresQuery = progresQuery.eq('ustadz_id', target.ustadz_id)
+      }
+      const { data: progresRows } = await progresQuery
 
       let progressValue = 0
       const rows = (progresRows ?? []) as ProgresRow[]
@@ -150,12 +173,27 @@ export default async function TargetPage({
             progressValue += 1
           }
         }
+      } else if (target.unit_type === 'juz') {
+        // Juz dihitung dari total halaman yang disetorkan, lalu dibagi 20
+        // (mushaf standar: 1 juz = 20 halaman). Hasil dibulatkan 1 desimal.
+        let totalHalaman = 0
+        for (const r of rows) {
+          if (r.halaman_mulai != null && r.halaman_selesai != null) {
+            const diff = r.halaman_selesai - r.halaman_mulai + 1
+            if (diff > 0) totalHalaman += diff
+          }
+        }
+        progressValue = Math.round((totalHalaman / 20) * 10) / 10
       }
 
       return {
         id: target.id as string,
         ustadzId: target.ustadz_id as string,
         ustadzNama: ustadzNameMap.get(target.ustadz_id) ?? '—',
+        santriId: (target.santri_id ?? null) as string | null,
+        santriNama: target.santri_id
+          ? santriNameMap.get(target.santri_id) ?? '—'
+          : null,
         kategoriId: target.kategori_id as number,
         kategoriNama: kategoriNameMap.get(target.kategori_id) ?? '—',
         judul: target.judul as string,
@@ -178,6 +216,7 @@ export default async function TargetPage({
       currentUserId={user.id}
       ustadzList={ustadzList}
       kategoriList={kategoriList ?? []}
+      santriList={santriList}
       targets={enrichedTargets}
     />
   )

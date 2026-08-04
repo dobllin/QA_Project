@@ -20,15 +20,19 @@ type KategoriRef = {
   nama: string
 }
 
+type SantriRef = { id: string; nama: string; kelas: string | null; halaqoh: string | null }
+
 type Target = {
   id: string
   ustadzId: string
   ustadzNama: string
+  santriId: string | null
+  santriNama: string | null
   kategoriId: number
   kategoriNama: string
   judul: string
   deskripsi: string | null
-  unitType: 'setoran' | 'ayat' | 'halaman'
+  unitType: 'setoran' | 'ayat' | 'halaman' | 'juz'
   targetValue: number
   targetMulai: string
   targetSelesai: string
@@ -52,6 +56,7 @@ const unitLabel: Record<Target['unitType'], string> = {
   setoran: 'setoran',
   ayat: 'ayat',
   halaman: 'halaman',
+  juz: 'juz',
 }
 
 function formatTanggal(iso: string) {
@@ -75,6 +80,7 @@ export default function TargetClient({
   currentUserId,
   ustadzList,
   kategoriList,
+  santriList,
   targets,
 }: {
   institusi: Institusi
@@ -83,6 +89,7 @@ export default function TargetClient({
   currentUserId: string
   ustadzList: Ustadz[]
   kategoriList: KategoriRef[]
+  santriList: SantriRef[]
   targets: Target[]
 }) {
   const [activeStatus, setActiveStatus] = useState<
@@ -117,23 +124,24 @@ export default function TargetClient({
               : 'Target pengajaran kamu. Progress otomatis dari setoran yang kamu input.'}
           </p>
         </div>
-        {isAdmin && (
-          <button
-            onClick={() => setShowForm((v) => !v)}
-            className="shrink-0 bg-forest-700 hover:bg-forest-800 text-cream-50 text-sm font-medium px-5 py-2.5 rounded-lg transition"
-          >
-            {showForm ? 'Batal' : '+ Target baru'}
-          </button>
-        )}
+        <button
+          onClick={() => setShowForm((v) => !v)}
+          className="shrink-0 bg-forest-700 hover:bg-forest-800 text-cream-50 text-sm font-medium px-5 py-2.5 rounded-lg transition"
+        >
+          {showForm ? 'Batal' : '+ Target baru'}
+        </button>
       </div>
 
       <div className="divider-double mb-6" />
 
-      {showForm && isAdmin && (
+      {showForm && (
         <TargetForm
           institusiId={institusiId}
+          isAdmin={isAdmin}
+          currentUserId={currentUserId}
           ustadzList={ustadzList}
           kategoriList={kategoriList}
+          santriList={santriList}
           onDone={() => setShowForm(false)}
         />
       )}
@@ -187,13 +195,19 @@ export default function TargetClient({
 
 function TargetForm({
   institusiId,
+  isAdmin,
+  currentUserId,
   ustadzList,
   kategoriList,
+  santriList,
   onDone,
 }: {
   institusiId: number
+  isAdmin: boolean
+  currentUserId: string
   ustadzList: Ustadz[]
   kategoriList: KategoriRef[]
+  santriList: SantriRef[]
   onDone: () => void
 }) {
   const [isPending, startTransition] = useTransition()
@@ -228,23 +242,29 @@ function TargetForm({
         }}
         className="grid sm:grid-cols-2 gap-4"
       >
-        <div>
-          <label className="block text-xs font-medium text-ink-700 mb-1.5">
-            Ustadz / Ustadzah
-          </label>
-          <select
-            name="ustadz_id"
-            required
-            className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
-          >
-            <option value="">— Pilih —</option>
-            {ustadzList.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.nama} ({u.peran})
-              </option>
-            ))}
-          </select>
-        </div>
+        {isAdmin ? (
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">
+              Ustadz / Ustadzah
+            </label>
+            <select
+              name="ustadz_id"
+              required
+              className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+            >
+              <option value="">— Pilih —</option>
+              {ustadzList.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.nama} ({u.peran})
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          // Ustadz membuat target untuk dirinya sendiri — id-nya dikirim
+          // otomatis lewat hidden input, tidak perlu memilih.
+          <input type="hidden" name="ustadz_id" value={currentUserId} />
+        )}
         <div>
           <label className="block text-xs font-medium text-ink-700 mb-1.5">
             Kategori
@@ -258,6 +278,24 @@ function TargetForm({
             {kategoriList.map((k) => (
               <option key={k.id} value={k.id}>
                 {k.nama}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-medium text-ink-700 mb-1.5">
+            Santri
+          </label>
+          <select
+            name="santri_id"
+            required
+            className="w-full px-3 py-2 bg-cream-100 border border-line rounded-lg text-sm focus:outline-none focus:border-forest-700"
+          >
+            <option value="">— Pilih santri —</option>
+            {santriList.map((sn) => (
+              <option key={sn.id} value={sn.id}>
+                {sn.nama}
+                {sn.kelas ? ` · ${sn.kelas}` : ''}
               </option>
             ))}
           </select>
@@ -296,6 +334,7 @@ function TargetForm({
             <option value="setoran">Jumlah setoran</option>
             <option value="ayat">Jumlah ayat (Tahfiz)</option>
             <option value="halaman">Jumlah halaman (Kitab/Iqro)</option>
+            <option value="juz">Jumlah juz (dihitung dari halaman, 1 juz = 20 hal)</option>
           </select>
         </div>
         <div>
@@ -437,6 +476,11 @@ function TargetCard({
       <div className="flex items-start justify-between gap-4 mb-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
+            {target.santriNama && (
+              <span className="text-[10px] font-medium uppercase tracking-wider text-forest-700 bg-forest-700/10 border border-forest-700/30 rounded px-1.5 py-0.5">
+                {target.santriNama}
+              </span>
+            )}
             <span className="text-[10px] font-medium uppercase tracking-wider text-copper-600 bg-copper-500/10 border border-copper-500/30 rounded px-1.5 py-0.5">
               {target.kategoriNama}
             </span>

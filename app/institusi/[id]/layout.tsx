@@ -131,6 +131,10 @@ export default async function InstitusiLayout({
               {isAdmin ? 'Laporan' : 'Laporan & absensi'}
             </NavItem>
 
+            <NavItem href={`/institusi/${institusi.id}/target`}>
+              Target
+            </NavItem>
+
             {isPondok && (
               <NavItem href={`/institusi/${institusi.id}/recap`}>
                 Recap poin

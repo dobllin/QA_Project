@@ -37,14 +37,51 @@ async function assertInstitusiAdmin(institusiId: number) {
   return user.id
 }
 
+// Izinkan admin ATAU ustadz/ustadzah di institusi ini. Mengembalikan
+// { userId, isAdmin }. Dipakai createTarget agar ustadz bisa membuat target
+// untuk dirinya sendiri, sementara admin bisa untuk siapa saja.
+async function assertInstitusiMember(institusiId: number) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Tidak masuk')
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_super_admin')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.is_super_admin) return { userId: user.id, isAdmin: true }
+
+  const { data: assignments } = await supabase
+    .from('user_institusi')
+    .select('peran')
+    .eq('user_id', user.id)
+    .eq('institusi_id', institusiId)
+    .in('peran', ['admin', 'ustadz', 'ustadzah'])
+
+  if (!assignments || assignments.length === 0) {
+    throw new Error('Bukan anggota institusi ini')
+  }
+  const isAdmin = assignments.some((a) => (a as { peran: string }).peran === 'admin')
+  return { userId: user.id, isAdmin }
+}
+
 export async function createTarget(
   institusiId: number,
   formData: FormData
 ) {
-  const createdBy = await assertInstitusiAdmin(institusiId)
+  const { userId: createdBy, isAdmin } = await assertInstitusiMember(institusiId)
 
-  const ustadzId = String(formData.get('ustadz_id') ?? '').trim()
+  let ustadzId = String(formData.get('ustadz_id') ?? '').trim()
+  // Ustadz (bukan admin) hanya boleh membuat target untuk dirinya sendiri.
+  if (!isAdmin) {
+    ustadzId = createdBy
+  }
   const kategoriId = Number(formData.get('kategori_id'))
+  const santriId = String(formData.get('santri_id') ?? '').trim() || null
   const judul = String(formData.get('judul') ?? '').trim()
   const deskripsi = String(formData.get('deskripsi') ?? '').trim() || null
   const unitType = String(formData.get('unit_type') ?? 'setoran').trim()
@@ -55,7 +92,7 @@ export async function createTarget(
   if (!ustadzId || !kategoriId || !judul) {
     return { error: 'Ustadz, kategori, dan judul wajib diisi' }
   }
-  if (!['setoran', 'ayat', 'halaman'].includes(unitType)) {
+  if (!['setoran', 'ayat', 'halaman', 'juz'].includes(unitType)) {
     return { error: 'Tipe unit tidak valid' }
   }
   if (!targetValue || targetValue <= 0) {
@@ -93,6 +130,7 @@ export async function createTarget(
 
   const { error } = await admin.from('ustadz_target').insert({
     ustadz_id: ustadzId,
+    santri_id: santriId,
     kategori_id: kategoriId,
     institusi_id: institusiId,
     judul,
