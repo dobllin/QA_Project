@@ -18,7 +18,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 
-const DEFAULT_MODEL = 'gemini-2.5-flash'
+const DEFAULT_MODEL = 'gemini-flash-latest'
 
 // ------------------------------------------------------------
 // Guard: pastikan pemanggil adalah super admin.
@@ -56,6 +56,7 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
   }
 
   const model = process.env.GEMINI_MODEL || DEFAULT_MODEL
+  console.log('[PERANGKAT] pakai model:', model)
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
 
   const payload = {
