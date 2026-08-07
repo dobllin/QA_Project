@@ -18,7 +18,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 
-const DEFAULT_MODEL = 'gemini-2.5-flash-preview-09-2025'
+const DEFAULT_MODEL = 'gemini-2.5-flash'
 
 // ------------------------------------------------------------
 // Guard: pastikan pemanggil adalah super admin.
