@@ -495,7 +495,7 @@ export default function LaporanMingguanClient({
                   {g.kategoriGroups.map((k) => (
                     <div
                       key={k.kategoriId}
-                      style={{ marginTop: "14px", pageBreakInside: "avoid" }}
+                      style={{ marginTop: "14px" }}
                     >
                       <div
                         style={{
